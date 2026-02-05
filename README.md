@@ -1,8 +1,8 @@
-# UCL IFT - Big Data in Quantitative Finance Coursework 2024-25
+# UCL IFT - Big Data in Quantitative Finance Coursework 2025-26
 
-This is the main repo for the Coursework of the module Big Data in Quantitative Finance 2024-25.
+This is the main repo for the Coursework of the module Big Data in Quantitative Finance 2025-26.
 
-For detailed Coursework instruction, follow-up to team_oak [coursework one](https://github.com/iftucl/ift_coursework_2025/blob/main/team_oak/coursework_one/README.md) and two README.mds.
+For detailed Coursework instruction, follow-up to team_oak [coursework one](https://github.com/iftucl/ift_coursework_2025/blob/main/team_bernoulli/coursework_one/README.md) and two README.mds.
 
 ## Coursework Teams
 

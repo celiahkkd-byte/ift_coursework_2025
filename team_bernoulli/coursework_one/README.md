@@ -269,7 +269,7 @@ In order to submit the coursework, students must follow these steps:
 4. Clone Your Forked Repository
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/ift_coursework_2024.git
+git clone https://github.com/YOUR-USERNAME/ift_coursework_2025.git
 
 ```
 
