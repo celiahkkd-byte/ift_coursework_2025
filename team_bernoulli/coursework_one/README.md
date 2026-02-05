@@ -80,6 +80,8 @@ Developers and specialist can expand on the technologies provided however, any a
 
 ## Code Submission
 
+**Code must be submitted to github by Friday 27/02/2026 at 1400 GMT.**
+
 For each coursework submission code must be submitted to github via pull request assigned to [@uceslc0](https://github.com/uceslc0) for final review before merging.
 The repository for submission is https://github.com/iftucl/ift_coursework_2025.
 
