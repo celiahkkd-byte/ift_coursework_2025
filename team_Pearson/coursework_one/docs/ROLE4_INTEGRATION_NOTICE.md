@@ -53,6 +53,26 @@ Each record returned by `extract_source_a/b` must include / 每条记录至少�
 - `factor_name`
 - `factor_value`
 - `source`
+- `metric_frequency` (`daily|monthly|quarterly|annual`)
+
+Recommended for staleness control / 为了时效性控制，强烈建议增加:
+- `source_report_date`
+
+## 4.1) Mixed-frequency policy / 混合频率处理规则（必须遵守）
+- `--frequency` is pipeline run frequency, not the natural frequency of each metric.
+- `--frequency` 是流水线运行频率，不等于每个因子的天然发布频率。
+- Each row must carry its own `metric_frequency`.
+- 每条记录必须标注自己的 `metric_frequency`。
+- Low-frequency factors (quarterly/annual) must use step-forward fill with staleness limits; do not fake daily "new" fundamentals.
+- 低频因子（季/年）在高频运行中必须使用前值延续并遵守过期阈值，不能伪造“每日新财报”。
+- High-frequency factors (daily) may be aggregated to monthly for portfolio rebalance use.
+- 高频因子（日报）可在组合调仓前聚合到月频使用。
+
+Current data requirements reference / 当前需求对应频率示例:
+- `News Sentiment`: daily
+- `Dividend Yield`, `P/B`: monthly
+- `Debt/Equity`: quarterly
+- `EBITDA Margin`: quarterly/annual
 
 ## 5) Integrator flow / 总装流程（已接入）
 - `get_company_universe`
