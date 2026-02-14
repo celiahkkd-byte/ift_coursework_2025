@@ -3,6 +3,30 @@
 Audience / 适用对象: Roles 3, 5, 6, 7, 8  
 Goal / 目标: Parallel development with low conflict and fast merge to team branch / 并行开发、低冲突、快速合流
 
+## 0) First-time setup / 首次同步（先做这个）
+If you do not have the repo locally yet / 如果你本地还没有仓库:
+
+```bash
+git clone https://github.com/celiahkkd-byte/ift_coursework_2025.git
+cd ift_coursework_2025
+git checkout feature/coursework_one_Team_04_Pearson
+git pull origin feature/coursework_one_Team_04_Pearson
+```
+
+If you already cloned before / 如果你之前已经克隆过:
+
+```bash
+cd ift_coursework_2025
+git checkout feature/coursework_one_Team_04_Pearson
+git pull origin feature/coursework_one_Team_04_Pearson
+```
+
+Important / 重点说明:
+- "Go to project directory" means your own local `ift_coursework_2025`, not someone else's computer.
+- “进入项目目录”指的是你自己电脑上的 `ift_coursework_2025`，不是别人电脑里的目录。
+- Everyone syncs from the same team branch above, then creates their own role branch.
+- 每个人都先同步同一个团队分支，再创建自己的角色分支开发。
+
 ## 1) Branch workflow / 分支流程（必须）
 Run from repo root `ift_coursework_2025/`:
 
@@ -26,6 +50,8 @@ git push -u origin <your branch>
 
 Open PR to / 发 PR 到:
 - `feature/coursework_one_Team_04_Pearson`
+- Do NOT open PR to `main`.
+- 不要把 PR 的目标分支选成 `main`。
 
 ## 2) File ownership / 文件归属（只改自己的）
 - Role 5: `modules/db/*`
