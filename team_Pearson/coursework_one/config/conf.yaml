@@ -1,0 +1,7 @@
+pipeline:
+  frequency: daily
+  backfill_years: 5
+  company_limit: 20
+
+logging:
+  run_log_path: logs/pipeline_runs.jsonl
