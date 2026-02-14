@@ -98,4 +98,4 @@ Pass criteria / 通过标准:
 
 ## 7) Commit scope / 提交边界
 - Keep all changes inside `team_Pearson/coursework_one/` plus required team-level files.
-- Do not commit unrelated folders/artifacts (DB folders, caches, temp files, etc.).
+- Do not commit unrelated folders/artifacts (DB folders, etc.).
