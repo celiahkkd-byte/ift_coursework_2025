@@ -23,6 +23,7 @@ As the Product Owner, draft the foundational investment goals and define the cor
     5. Conclusions
 - [ ] **Presentation Prep:** Outline the compelling presentation required to demonstrate how the product meets its intended goals.
 
+---
 
 ### Issue #2: [Requirements] Define Data Requirements Log & Architecture Diagrams
 **Assignee:** Portfolio Product Specialist (Role 2)
@@ -44,7 +45,7 @@ Translate the investment factors defined by the PM into strict, technical data s
 - [ ] **Architecture Diagrams:** Create high-level system architecture diagrams using `draw.io` or `lucidcharts` to visually map the data flow from External APIs / Internal DB → MinIO → PostgreSQL.
 - [ ] **Sphinx Setup:** Initialize the `/docs` directory. The Sphinx documentation must successfully compile using the `make html` command and be viewable locally.
 
-
+---
 
 ###  Issue #3: [Architecture] Design DB Schema, MinIO Partitioning & Containerization
 **Assignee:** Architecture & Storage Designer (Role 3 / Developer)
@@ -67,7 +68,7 @@ Design a scalable storage solution utilizing PostgreSQL and MinIO. Ensure that a
 - [ ] **Robustness:** The database design must be flexible enough to handle the addition or removal of companies from the `company_static` table.
 - [ ] **Containerization Compliance:** Ensure any additional components designed for the infrastructure (e.g., Kafka for streaming, Airflow for scheduling) are strictly containerized using Docker, extending the provided `docker-compose.yml`.
 
-
+---
 
 ### Issue #4: [Integrator] Establish Pipeline Skeleton, Toolchain & Strict Folder Structure
 **Assignee:** Pipeline Integrator (Role 4 / Developer)
@@ -90,7 +91,7 @@ Set up the fundamental project architecture using Poetry. Enforce the strict fol
 - [ ] **Database Isolation:** Do NOT copy databases into other folders. Ensure any changes outside the group folder (e.g., `000.Database`) are un-staged before committing to Git.
 - [ ] **CLI & Scheduling:** `Main.py` must support `--run-date` and `--frequency`. Implement or mock a scheduling library (like `APScheduler` or `Airflow`) to satisfy the "Application Flexibility" requirement.
 
-
+---
 
 ### Issue #5: [DB Connectivity] Implement Universe Extraction Layer & Sphinx Docs
 **Assignee:** Universe & DB Connectivity Engineer (Role 5 / Developer)
@@ -113,7 +114,7 @@ Develop a secure and reusable database connection module that reads the dynamic 
 - [ ] **Sphinx Setup:** Run `sphinx-quickstart` to initialize the `/docs` directory. Configure `conf.py` (e.g., adding `myst_parser` for markdown support and `sphinx.ext.autodoc` to automatically extract Python docstrings).
 - [ ] **Documentation Build:** Ensure the command `make html` successfully builds the documentation site locally.
 
-
+---
 
 ### Issue #6: [Extraction] Ingest Structured Pricing and Financial Data to MinIO
 **Assignee:** Extractor A (Role 6 / Developer)
@@ -134,7 +135,7 @@ Develop the data ingestion pipeline to pull historical structured pricing and fi
 - [ ] **Raw Storage:** Persistently serialize the raw API responses into MinIO, strictly adhering to the `raw/{source}/...` pathing specifications.
 - [ ] **Error Handling:** Implement robust retry logic and rate-limit avoidance (e.g., `time.sleep()`) to prevent HTTP 429 bans.
 
-
+---
 
 ### Issue #7: [Extraction] Ingest Unstructured News & Calculate Sentiment
 **Assignee:** Extractor B (Role 7 / Developer)
@@ -155,7 +156,7 @@ Enhance the dataset by ingesting unstructured alternative data (news headlines) 
 - [ ] **Sentiment Computation:** Implement NLP scoring logic to calculate a normalized daily `sentiment_score` (-1.0 to 1.0) over a rolling 30-day window.
 - [ ] **Fallback Logic:** If no news exists for a 30-day window, the function must handle the empty state gracefully and return `0.0`.
 
-
+---
 
 ###  Issue #8: [ETL & QA] Normalize Data, Enforce Quality & Achieve 80% pytest Coverage
 **Assignee:** Transform, Quality & Tests Anchor (Role 8 / Developer)
