@@ -4,7 +4,7 @@
 CREATE SCHEMA IF NOT EXISTS systematic_equity;
 
 CREATE TABLE IF NOT EXISTS systematic_equity.factor_observations (
-    company_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
     as_of_date DATE NOT NULL,
     factor_name TEXT NOT NULL,
     factor_value DOUBLE PRECISION,
@@ -13,21 +13,21 @@ CREATE TABLE IF NOT EXISTS systematic_equity.factor_observations (
     source_report_date DATE,
     run_id TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_factor_obs UNIQUE (company_id, factor_name, as_of_date)
+    CONSTRAINT uq_factor_obs UNIQUE (symbol, factor_name, as_of_date)
 );
 
-CREATE INDEX IF NOT EXISTS idx_factor_obs_company_id
-    ON systematic_equity.factor_observations (company_id);
+CREATE INDEX IF NOT EXISTS idx_factor_obs_symbol
+    ON systematic_equity.factor_observations (symbol);
 
 CREATE INDEX IF NOT EXISTS idx_factor_obs_as_of_date
     ON systematic_equity.factor_observations (as_of_date);
 
 -- Example UPSERT pattern (for reference):
 -- INSERT INTO systematic_equity.factor_observations (
---     company_id, as_of_date, factor_name, factor_value, source,
+--     symbol, as_of_date, factor_name, factor_value, source,
 --     metric_frequency, source_report_date, run_id
 -- ) VALUES (...)
--- ON CONFLICT (company_id, factor_name, as_of_date)
+-- ON CONFLICT (symbol, factor_name, as_of_date)
 -- DO UPDATE SET
 --     factor_value = EXCLUDED.factor_value,
 --     source = EXCLUDED.source,

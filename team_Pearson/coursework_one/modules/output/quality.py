@@ -12,8 +12,8 @@ def run_quality_checks(records: List[Dict[str, Any]]) -> Dict[str, int]:
     duplicates = 0
     for r in records:
         key = (
-            r.get("company_id"),
-            r.get("observation_date"),
+            r.get("symbol"),
+            r.get("as_of_date"),
             r.get("factor_name"),
             r.get("source"),
         )
