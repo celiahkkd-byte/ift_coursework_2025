@@ -28,6 +28,28 @@ python Main.py --run-date 2026-02-14 --frequency daily --dry-run
 python -m pytest tests -q
 ```
 
+## Container bootstrap (minimal)
+Use the repository root `docker-compose.yml` as shared infra. From repo root:
+
+```bash
+docker compose up -d postgres_db mongo_db miniocw
+```
+
+Services and local ports from current compose:
+- PostgreSQL: `localhost:5439`
+- MongoDB: `localhost:27019`
+- MinIO API: `localhost:9000` (Console: `localhost:9001`)
+
+Environment template for local runtime:
+- `team_Pearson/coursework_one/.env.example`
+
+If needed, create your local env file:
+
+```bash
+cd team_Pearson/coursework_one
+cp .env.example .env
+```
+
 ## CLI parameters
 - `--run-date` (required): decision date in `YYYY-MM-DD`
 - `--frequency` (required): `daily|weekly|monthly|quarterly`
