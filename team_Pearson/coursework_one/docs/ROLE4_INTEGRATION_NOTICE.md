@@ -137,6 +137,16 @@ poetry run python Main.py --run-date 2026-12-31 --frequency annual --dry-run
 poetry run pytest tests -q
 ```
 
+One-command-sequence summary / 一条流程总结:
+```bash
+cd ift_coursework_2025
+docker compose up -d postgres_db mongo_db miniocw
+cd team_Pearson/coursework_one
+poetry install
+poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run
+poetry run pytest tests -q
+```
+
 Pass criteria / 通过标准:
 - Exit code is `0`
 - Output contains `run_log_written_to`
