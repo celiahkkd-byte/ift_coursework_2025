@@ -63,7 +63,7 @@ Design a scalable storage solution utilizing PostgreSQL and MinIO. Ensure that a
 - Extended `docker-compose` configurations if necessary.
 
 **Acceptance Criteria (Definition of Done):**
-- [ ] **PostgreSQL DDL:** Provide the SQL script to create `factor_observations` in `systematic_equity`. Must include a composite primary key (`company_id`, `observation_date`, `factor_name`) and proper indexes.
+- [ ] **PostgreSQL DDL:** Provide the SQL script to create `factor_observations` in `systematic_equity`. Must include a composite primary key (`symbol`, `as_of_date`, `factor_name`) and proper indexes.
 - [ ] **MinIO Data Lake Pathing:** Define the exact folder structure for raw unstructured files. Required format: `raw/{source_name}/{dataset_type}/as_of_date={YYYY-MM-DD}/run_date={YYYY-MM-DD}/`.
 - [ ] **Robustness:** The database design must be flexible enough to handle the addition or removal of companies from the `company_static` table.
 - [ ] **Containerization Compliance:** Ensure any additional components designed for the infrastructure (e.g., Kafka for streaming, Airflow for scheduling) are strictly containerized using Docker, extending the provided `docker-compose.yml`.
@@ -109,7 +109,7 @@ Develop a secure and reusable database connection module that reads the dynamic 
 
 **Acceptance Criteria (Definition of Done):**
 - [ ] **Connection Manager:** Implement a robust connection manager reading credentials securely from environment variables.
-- [ ] **Universe Retrieval:** Implement a function `get_company_universe()` that dynamically fetches symbols (or `company_ids`) from `systematic_equity.company_static`.
+- [ ] **Universe Retrieval:** Implement a function `get_company_universe()` that dynamically fetches symbols (or `symbols`) from `systematic_equity.company_static`.
 - [ ] **Limit Parameter:** The function MUST support a `--company-limit` parameter to allow developers to pull a small subset of companies for fast local debugging.
 - [ ] **Sphinx Setup:** Run `sphinx-quickstart` to initialize the `/docs` directory. Configure `conf.py` (e.g., adding `myst_parser` for markdown support and `sphinx.ext.autodoc` to automatically extract Python docstrings).
 - [ ] **Documentation Build:** Ensure the command `make html` successfully builds the documentation site locally.

@@ -60,11 +60,11 @@ def write_jsonl(path: str, record: Dict[str, Any]) -> None:
 
 
 def collect_raw_records(
-    company_ids: List[str], run_date: str, frequency: str, backfill_years: int
+    symbols: List[str], run_date: str, frequency: str, backfill_years: int
 ) -> List[Dict[str, Any]]:
     """Merge records from the currently integrated source modules."""
-    raw_a = extract_source_a(company_ids, run_date, backfill_years, frequency)
-    raw_b = extract_source_b(company_ids, run_date, backfill_years, frequency)
+    raw_a = extract_source_a(symbols, run_date, backfill_years, frequency)
+    raw_b = extract_source_b(symbols, run_date, backfill_years, frequency)
     return raw_a + raw_b
 
 

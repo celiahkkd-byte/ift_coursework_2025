@@ -90,8 +90,8 @@ poetry run python Main.py --run-date 2026-12-31 --frequency annual --dry-run
 
 ## Integration contracts (for roles 3/5/6/7/8)
 - `modules.db.get_company_universe(company_limit: int) -> list[str]`
-- `modules.input.extract_source_a(company_ids, run_date, backfill_years, frequency) -> list[dict]`
-- `modules.input.extract_source_b(company_ids, run_date, backfill_years, frequency) -> list[dict]`
+- `modules.input.extract_source_a(symbols, run_date, backfill_years, frequency) -> list[dict]`
+- `modules.input.extract_source_b(symbols, run_date, backfill_years, frequency) -> list[dict]`
 - `modules.output.normalize_records(records) -> list[dict]`
 - `modules.output.run_quality_checks(records) -> dict`
 - `modules.output.load_curated(records, dry_run: bool) -> int`

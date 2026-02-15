@@ -79,16 +79,16 @@ Do not modify others' modules or `Main.py` without agreement.
 
 ## 3) Fixed interface contracts / 固定接口契约（函数名不可改）
 1. `modules.db.get_company_universe(company_limit: int) -> list[str]`
-2. `modules.input.extract_source_a(company_ids, run_date, backfill_years, frequency) -> list[dict]`
-3. `modules.input.extract_source_b(company_ids, run_date, backfill_years, frequency) -> list[dict]`
+2. `modules.input.extract_source_a(symbols, run_date, backfill_years, frequency) -> list[dict]`
+3. `modules.input.extract_source_b(symbols, run_date, backfill_years, frequency) -> list[dict]`
 4. `modules.output.normalize_records(records) -> list[dict]`
 5. `modules.output.run_quality_checks(records) -> dict`
 6. `modules.output.load_curated(records, dry_run: bool) -> int`
 
 ## 4) Minimum upstream schema / 上游最小字段要求（Role 6/7）
 Each record returned by `extract_source_a/b` must include / 每条记录至少包含:
-- `company_id`
-- `observation_date`
+- `symbol`
+- `as_of_date`
 - `factor_name`
 - `factor_value`
 - `source`

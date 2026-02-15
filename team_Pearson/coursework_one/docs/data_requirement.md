@@ -115,14 +115,14 @@ The pipeline and infrastructure must pass the following verifiable automated cri
 - **Test Coverage Red Line:** The `pytest` suite running over the `transform` and `quality` modules must achieve a minimum of **80% code coverage**.
 
 ### 2. Query Capability & Indexing
-- **EAV / Long Table Pattern:** The `factor_observations` schema must be designed as a "long table" (e.g., `company_id`, `as_of_date`, `factor_name`, `factor_value`) rather than a wide table, satisfying the requirement that *adding a new metric must not require a schema ALTER operation*.
-- **Performance:** B-Tree indexes must be applied to `company_id` and `as_of_date`. The database must support sub-second query execution times for:
-  1. Retrieving all metrics for a single `company_id` over a 5-year period.
+- **EAV / Long Table Pattern:** The `factor_observations` schema must be designed as a "long table" (e.g., `symbol`, `as_of_date`, `factor_name`, `factor_value`) rather than a wide table, satisfying the requirement that *adding a new metric must not require a schema ALTER operation*.
+- **Performance:** B-Tree indexes must be applied to `symbol` and `as_of_date`. The database must support sub-second query execution times for:
+  1. Retrieving all metrics for a single `symbol` over a 5-year period.
   2. Retrieving a specific `factor_name` across all companies for a given calendar year.
 
 ### 3. Pipeline Robustness & Fault Tolerance
 - **Dynamic Universe:** The pipeline must dynamically query `systematic_equity.company_static` at runtime. Adding or removing a symbol from this table must immediately reflect in the pipeline's execution loop without requiring codebase changes.
-- **Idempotency & Uniqueness:** The pipeline must be idempotent. Rerunning the pipeline for the same date range must not duplicate data. PostgreSQL must utilize a composite Unique Constraint (`company_id`, `factor_name`, `as_of_date`) combined with an `INSERT ... ON CONFLICT DO UPDATE` (Upsert) strategy.
+- **Idempotency & Uniqueness:** The pipeline must be idempotent. Rerunning the pipeline for the same date range must not duplicate data. PostgreSQL must utilize a composite Unique Constraint (`symbol`, `factor_name`, `as_of_date`) combined with an `INSERT ... ON CONFLICT DO UPDATE` (Upsert) strategy.
 - **Non-Blocking Execution:** If the API request for `company A` fails (e.g., HTTP 404 or 500), the pipeline must catch the exception, log the error trace to a `pipeline_runs` audit table, and seamlessly continue processing `company B`.
 
 ### 4. Quality Auditability
