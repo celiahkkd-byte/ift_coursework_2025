@@ -115,7 +115,55 @@ Current data requirements reference / 当前需求对应频率示例:
 - `load_curated`
 - run log
 
-## 5.1) Docker requirements & what we need to build / Docker 要求与是否需要自己构建
+## 5.1) Who uses Docker & how to use it / 哪些角色需要 Docker & 如何使用
+
+### English
+- **Who needs Docker?**
+  - All roles that need to connect to the shared infrastructure (PostgreSQL, MongoDB, MinIO, etc.) must use Docker to launch these services for local development and testing.
+  - If your module interacts with any of the above (DB, MinIO), you **must** start the containers via `docker compose` before running your code.
+  - If you are only writing pure logic, you may skip Docker, but you must still ensure your code works when run in the integrated environment.
+
+- **How to use Docker for this coursework?**
+  1. Go to the repo root (`ift_coursework_2025/`).
+  2. Run:
+     ```bash
+     docker compose up -d postgres_db mongo_db miniocw
+     ```
+  3. Run your app/tests in `team_Pearson/coursework_one/` as usual.
+  4. To stop containers:
+     ```bash
+     docker compose down
+     ```
+
+- **Tips**
+  - Do **not** run `docker compose` inside `team_Pearson/coursework_one/`.
+  - If you see connection errors, check whether the containers are running with `docker ps`.
+  - If you change `docker-compose.yml`, others must pull and restart their containers.
+
+### 中文
+- **哪些角色需要用 Docker？**
+  - 所有需要连接共享基础设施（PostgreSQL, MongoDB, MinIO 等）的角色都必须用 Docker 启动这些服务，本地开发/测试。
+  - 如果你的模块要访问上述任何服务（DB, MinIO），**必须**先用 `docker compose` 启动容器再运行代码。
+  - 如果只写纯逻辑，可以不用 Docker，但最终代码仍需在集成环境下通过。
+
+- **本作业 Docker 使用方法？**
+  1. 进入仓库根目录（`ift_coursework_2025/`）。
+  2. 执行：
+     ```bash
+     docker compose up -d postgres_db mongo_db miniocw
+     ```
+  3. 在 `team_Pearson/coursework_one/` 目录正常开发/测试。
+  4. 停止容器：
+     ```bash
+     docker compose down
+     ```
+
+- **常见问题**
+  - **不要**在 `team_Pearson/coursework_one/` 下运行 `docker compose`。
+  - 如果出现连接错误，先用 `docker ps` 检查容器是否在运行。
+  - 如果 `docker-compose.yml` 有改动，其他人需要同步并重启容器。
+
+## 5.2) Docker requirements & what we need to build / Docker 要求与是否需要自己构建
 
 ### English
 - **Do we need to write our own Dockerfile / rebuild everything?**
@@ -145,7 +193,7 @@ Current data requirements reference / 当前需求对应频率示例:
 - **连接信息**（host/port/user/password）必须以 `docker-compose.yml` 为准。
 
 
-## 5.2) Runtime config (.env) & connection conventions / 运行配置（.env）与连接规范
+## 5.3) Runtime config (.env) & connection conventions / 运行配置（.env）与连接规范
 
 ### English
 **Where is the config template?**
