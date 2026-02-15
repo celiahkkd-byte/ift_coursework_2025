@@ -24,13 +24,12 @@ As the Product Owner, draft the foundational investment goals and define the cor
 - [ ] **Presentation Prep:** Outline the compelling presentation required to demonstrate how the product meets its intended goals.
 
 ---
-
 ### Issue #2: [Requirements] Define Data Requirements Log & Architecture Diagrams
 **Assignee:** Portfolio Product Specialist (Role 2)
 **Labels:** `documentation`, `requirements`
 
 **Description:**
-Translate the investment factors defined by the PM into strict, technical data specifications. Initialize the Sphinx documentation framework and create high-level visual architecture diagrams.
+Translate the investment factors defined by the PM into strict, technical data specifications. Create high-level visual architecture diagrams to guide the engineering team.
 
 **Inputs:**
 - The list of business factors defined by the PO.
@@ -38,13 +37,11 @@ Translate the investment factors defined by the PM into strict, technical data s
 **Outputs:**
 - Data Requirements Log mapping (`Business Metric` → `Raw Field` → `Origin Source` → `Target Storage` → `Frequency` → `Missing Rules`).
 - System architecture diagrams.
-- Sphinx project skeleton.
 
 **Acceptance Criteria (Definition of Done):**
 - [ ] **Data Requirements Log:** Update `docs/data_requirements_log.md` with explicit missing data tolerance rules and look-ahead bias prevention.
 - [ ] **Architecture Diagrams:** Create high-level system architecture diagrams using `draw.io` or `lucidcharts` to visually map the data flow from External APIs / Internal DB → MinIO → PostgreSQL.
-- [ ] **Sphinx Setup:** Initialize the `/docs` directory. The Sphinx documentation must successfully compile using the `make html` command and be viewable locally.
-
+- [ ] **Documentation Handoff:** Ensure all requirement logs and diagrams are formatted in standard Markdown (`.md`) and handed over to the developer managing the Sphinx repository (Role 5) for integration.
 ---
 
 ###  Issue #3: [Architecture] Design DB Schema, MinIO Partitioning & Containerization
