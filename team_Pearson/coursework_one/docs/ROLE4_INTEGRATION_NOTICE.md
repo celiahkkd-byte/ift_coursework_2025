@@ -61,6 +61,19 @@ Open PR to / 发 PR 到:
 - Role 3: `modules/output/load.py`
 - Role 4 (Integrator): `Main.py` and integration flow
 
+### 2.1 Output/DB infra ownership / Output与数据库基础设施分工补充
+- Role 3 (primary): Output persistence implementation
+  - `team_Pearson/coursework_one/modules/output/load.py`
+  - `sql/init.sql` (upsert rules, indexes, constraints; if this file is used in your repo structure)
+- Role 5 (support): Validate SQL compatibility with existing DB schema and company universe tables
+- Role 4 (primary for integration safety): Global runtime/config wiring
+  - `docker-compose.yml`
+  - `.env` / connection configuration conventions
+
+Notes / 说明:
+- To avoid merge conflicts, `docker-compose.yml` and shared `.env` conventions are coordinated by Role 4.
+- 为避免冲突，`docker-compose.yml` 和共享 `.env` 规范由4号统一协调。
+
 Do not modify others' modules or `Main.py` without agreement.  
 未经沟通，不要改别人模块和 `Main.py`。
 
