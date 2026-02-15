@@ -127,7 +127,7 @@ Run in `team_Pearson/coursework_one/`:
 ```bash
 poetry install
 poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run
-poetry run pytest -q test/test_smoke.py
+poetry run pytest tests -q
 ```
 
 Pass criteria / 通过标准:

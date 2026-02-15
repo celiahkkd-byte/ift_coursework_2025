@@ -25,7 +25,7 @@ poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run
 ```bash
 cd team_Pearson/coursework_one
 python Main.py --run-date 2026-02-14 --frequency daily --dry-run
-python -m pytest -q test/test_smoke.py
+python -m pytest tests -q
 ```
 
 ## CLI parameters
