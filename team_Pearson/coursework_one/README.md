@@ -45,3 +45,10 @@ This is an integration skeleton for role 4. Pipeline stages are currently mock s
 - `modules.output.normalize_records(records) -> list[dict]`
 - `modules.output.run_quality_checks(records) -> dict`
 - `modules.output.load_curated(records, dry_run: bool) -> int`
+
+## Output and Infra Ownership
+- Role 3 (primary): `modules/output/load.py` and SQL persistence rules (e.g., `sql/init.sql` with upsert/index/constraints)
+- Role 5 (support): database-schema compatibility checks for SQL changes
+- Role 4 (primary): integration-safe management of shared runtime config (`docker-compose.yml`, `.env` conventions)
+
+This split is used to reduce merge conflicts on shared infra files while keeping storage logic owned by the output/database roles.
