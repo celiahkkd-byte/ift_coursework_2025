@@ -144,7 +144,6 @@ Current data requirements reference / 当前需求对应频率示例:
 
 - **连接信息**（host/port/user/password）必须以 `docker-compose.yml` 为准。
 
-  - 我们之后会把这些整理进项目配置（4号会统一发布 `.env`/配置规范）。
 
 ## 5.2) Runtime config (.env) & connection conventions / 运行配置（.env）与连接规范
 
