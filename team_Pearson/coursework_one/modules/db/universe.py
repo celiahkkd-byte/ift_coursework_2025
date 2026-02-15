@@ -5,12 +5,13 @@ from .db_connection import get_db_connection
 
 def get_company_universe(company_limit: int) -> list[str]:
     """
-    Return company symbols from systematic_equity.company_static.
+    Return company_id list from systematic_equity.company_static.
+    (company_id is aligned to the team notice; in DB it maps to column `symbol`.)
     """
     limit = max(1, int(company_limit))
 
     sql = """
-        SELECT symbol
+        SELECT symbol AS company_id
         FROM systematic_equity.company_static
         ORDER BY symbol
         LIMIT %s;
@@ -46,9 +47,10 @@ if __name__ == "__main__":
     top10 = get_company_universe(10)
 
     print(f"Company count: {total}")
-    print("Top 10 company symbols:")
-    for symbol in top10:
-        print(symbol)
+    print("Top 10 company_id:")
+    for company_id in top10:
+        print(company_id)
+
 
 
 
