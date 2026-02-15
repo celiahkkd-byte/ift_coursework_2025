@@ -135,6 +135,26 @@ Pass criteria / 通过标准:
 - Output contains `run_log_written_to`
 - Smoke test passes
 
+## 6.1) Role 8 Testing Scope / 8号测试职责范围
+Role 8 is the primary owner of data validation tests and should ensure all testing layers are covered.
+8号是数据验收测试主责，需要确保测试分层完整（单元/集成/端到端）。
+
+Required scope / 必做范围:
+- Unit tests for output validation logic:
+  - `tests/test_normalize_unit.py`
+  - `tests/test_quality_unit.py`
+- Integration coverage for component interactions:
+  - `tests/test_pipeline_integration.py`
+- E2E/smoke verification of end-to-end pipeline:
+  - `tests/test_e2e.py`
+  - `tests/test_smoke.py`
+
+Target checks / 验收要求:
+- Use pytest through poetry:
+  - `poetry run pytest tests -q`
+- Keep coverage above red line:
+  - `poetry run pytest tests -q --cov=modules --cov=Main --cov-fail-under=80`
+
 ## 7) Commit scope / 提交边界
 - Keep all changes inside `team_Pearson/coursework_one/` plus required team-level files.
 - Do not commit unrelated folders/artifacts (DB folders, caches, temp files, etc.).
