@@ -40,6 +40,21 @@ cd ift_coursework_2025
 docker compose up -d postgres_db mongo_db miniocw
 ```
 
+## Standard run sequence (copy/paste)
+Run exactly in this order:
+
+```bash
+# 1) Start infra in repo root
+cd ift_coursework_2025
+docker compose up -d postgres_db mongo_db miniocw
+
+# 2) Run app and tests in coursework_one
+cd team_Pearson/coursework_one
+poetry install
+poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run
+poetry run pytest tests -q
+```
+
 Services and local ports from current compose:
 - PostgreSQL: `localhost:5439`
 - MongoDB: `localhost:27019`
