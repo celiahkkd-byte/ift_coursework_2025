@@ -122,11 +122,24 @@ Current data requirements reference / 当前需求对应频率示例:
 - run log
 
 ## 6) Local validation before PR / PR 前本地验收
-Run in `team_Pearson/coursework_one/`:
+Hard rule from coursework instructions / 老师要求的硬规则:
+- Run `docker compose ...` only in repo root `ift_coursework_2025/`.
+- Never run `docker compose` inside `team_Pearson/coursework_one/`.
+
+Start infra from repo root first:
+
+```bash
+cd ift_coursework_2025
+docker compose up -d postgres_db mongo_db miniocw
+```
+
+Then run app/tests in `team_Pearson/coursework_one/`:
 
 ```bash
 poetry install
 poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run
+poetry run python Main.py --run-date 2026-02-01 --frequency monthly --dry-run
+poetry run python Main.py --run-date 2026-12-31 --frequency annual --dry-run
 poetry run pytest tests -q
 ```
 

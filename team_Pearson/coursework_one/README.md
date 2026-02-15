@@ -29,9 +29,14 @@ python -m pytest tests -q
 ```
 
 ## Container bootstrap (minimal)
+Mandatory rule:
+- Run `docker compose ...` only in repository root `ift_coursework_2025/`.
+- Do not run `docker compose` inside `team_Pearson/coursework_one/`.
+
 Use the repository root `docker-compose.yml` as shared infra. From repo root:
 
 ```bash
+cd ift_coursework_2025
 docker compose up -d postgres_db mongo_db miniocw
 ```
 
@@ -52,13 +57,21 @@ cp .env.example .env
 
 ## CLI parameters
 - `--run-date` (required): decision date in `YYYY-MM-DD`
-- `--frequency` (required): `daily|weekly|monthly|quarterly`
+- `--frequency` (required): `daily|weekly|monthly|quarterly|annual`
 - `--backfill-years` (optional): history length, default from config
 - `--company-limit` (optional): universe size cap, default from config
 - `--dry-run` (optional): run pipeline without final load
 
 ## Current status
 This is an integration skeleton for role 4. Pipeline stages are currently mock stubs and will be replaced by module implementations from other roles.
+
+## Mixed-frequency run examples
+```bash
+cd team_Pearson/coursework_one
+poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run
+poetry run python Main.py --run-date 2026-02-01 --frequency monthly --dry-run
+poetry run python Main.py --run-date 2026-12-31 --frequency annual --dry-run
+```
 
 ## Integration contracts (for roles 3/5/6/7/8)
 - `modules.db.get_company_universe(company_limit: int) -> list[str]`

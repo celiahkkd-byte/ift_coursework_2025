@@ -16,7 +16,7 @@ from modules.db import get_company_universe
 from modules.input import extract_source_a, extract_source_b
 from modules.output import load_curated, normalize_records, run_quality_checks
 
-ALLOWED_FREQUENCIES = {"daily", "weekly", "monthly", "quarterly"}
+ALLOWED_FREQUENCIES = {"daily", "weekly", "monthly", "quarterly", "annual"}
 
 
 @dataclass
