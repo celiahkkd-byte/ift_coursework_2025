@@ -117,23 +117,38 @@ Current data requirements reference / 当前需求对应频率示例:
 
 ## 5.1) Who uses Docker & how to use it / 哪些角色需要 Docker & 如何使用
 
-### English
-- **Who needs Docker?**
-  - All roles that need to connect to the shared infrastructure (PostgreSQL, MongoDB, MinIO, etc.) must use Docker to launch these services for local development and testing.
-  - If your module interacts with any of the above (DB, MinIO), you **must** start the containers via `docker compose` before running your code.
-  - If you are only writing pure logic, you may skip Docker, but you must still ensure your code works when run in the integrated environment.
+**Roles that MUST use Docker (run/validate infra):**
+- **Role 3 (Architecture & Storage):** owns PostgreSQL/MinIO storage design; may extend `docker-compose.yml` if new infrastructure is added.
+- **Role 4 (Integrator):** ensures everyone can start the provided infrastructure via Docker and that the pipeline can connect using the compose-defined ports/credentials.
 
-- **How to use Docker for this coursework?**
-  1. Go to the repo root (`ift_coursework_2025/`).
-  2. Run:
-     ```bash
-     docker compose up -d postgres_db mongo_db miniocw
-     ```
-  3. Run your app/tests in `team_Pearson/coursework_one/` as usual.
-  4. To stop containers:
-     ```bash
-     docker compose down
-     ```
+**Roles that SHOULD use Docker (usually no compose changes):**
+- **Role 5 (DB Connectivity):** connects to PostgreSQL (and optionally MongoDB) started by Docker.
+- **Role 6/7 (Extractors):** may need MinIO (and/or MongoDB) running locally to persist raw payloads.
+- **Role 8 (Transform/Quality/Tests):** runs integration/E2E tests against PostgreSQL/MinIO.
+
+**Roles that typically do NOT need Docker:**
+- **Role 1/2 (PM/Requirements/Docs):** documentation focus; only run Docker if you want to reproduce screenshots or validate the pipeline locally.
+- If your module interacts with any of the above (DB, MinIO), you **must** start the containers via `docker compose` before running your code.
+  
+**How to use Docker (hard rules):**
+1) Run Docker commands **only from repo root** `ift_coursework_2025/` (where `docker-compose.yml` lives).
+2) Start required infra:
+   ```bash
+   cd ift_coursework_2025
+   docker compose up -d
+   # or start only the needed services (names depend on compose)
+   # docker compose up -d postgres_db mongo_db miniocw
+   ```
+3) Check services:
+   ```bash
+   docker compose ps
+   docker compose logs -n 50 --tail=50
+   ```
+4) Run your app/tests in `team_Pearson/coursework_one/` as usual.
+5) Stop services when done:
+   ```bash
+   docker compose down
+   ```
 
 - **Tips**
   - Do **not** run `docker compose` inside `team_Pearson/coursework_one/`.
@@ -141,27 +156,43 @@ Current data requirements reference / 当前需求对应频率示例:
   - If you change `docker-compose.yml`, others must pull and restart their containers.
 
 ### 中文
-- **哪些角色需要用 Docker？**
-  - 所有需要连接共享基础设施（PostgreSQL, MongoDB, MinIO 等）的角色都必须用 Docker 启动这些服务，本地开发/测试。
-  - 如果你的模块要访问上述任何服务（DB, MinIO），**必须**先用 `docker compose` 启动容器再运行代码。
-  - 如果只写纯逻辑，可以不用 Docker，但最终代码仍需在集成环境下通过。
+**必须使用 Docker 的角色（需要启动/验证基础设施）：**
+- **3号（架构与存储）：**负责 PostgreSQL/MinIO 存储架构设计；如果需要新增基础设施，可能需要扩展 `docker-compose.yml`。
+- **4号（总装/集成）：**保证大家能用 Docker 启动老师提供的基础设施，并确保流水线连接信息与 compose 中端口/账号一致。
 
-- **本作业 Docker 使用方法？**
-  1. 进入仓库根目录（`ift_coursework_2025/`）。
-  2. 执行：
-     ```bash
-     docker compose up -d postgres_db mongo_db miniocw
-     ```
-  3. 在 `team_Pearson/coursework_one/` 目录正常开发/测试。
-  4. 停止容器：
-     ```bash
-     docker compose down
-     ```
+**建议使用 Docker 的角色（一般不改 compose，只需要连上环境）：**
+- **5号（DB 连接）：**需要连接 Docker 启动的 PostgreSQL（以及可选的 MongoDB）。
+- **6/7号（抓取）：**可能需要本地启动 MinIO（和/或 MongoDB）来落地原始 payload。
+- **8号（清洗/质量/测试）：**需要对 PostgreSQL/MinIO 做集成/端到端测试。
 
+**通常不需要 Docker 的角色：**
+- **1/2号（产品/需求/文档）：**以文档为主；只有在需要复现截图或本地验证 pipeline 时才需要跑 Docker。
+- 如果你的模块要访问上述任何服务（DB, MinIO），**必须**先用 `docker compose` 启动容器再运行代码。
+  
+**如何使用 Docker（硬规则）：**
+1) Docker 命令只能在**仓库根目录** `ift_coursework_2025/`（有 `docker-compose.yml` 那层）运行。
+2) 启动所需基础设施：
+   ```bash
+   cd ift_coursework_2025
+   docker compose up -d
+   # 或者只启动需要的服务（服务名以 compose 为准）
+   # docker compose up -d postgres_db mongo_db miniocw
+   ```
+3) 查看服务状态：
+   ```bash
+   docker compose ps
+   docker compose logs -n 50 --tail=50
+   ```
+4) 在 `team_Pearson/coursework_one/` 目录正常开发/测试。
+5) 结束后关闭：
+   ```bash
+   docker compose down
+   ```
 - **常见问题**
   - **不要**在 `team_Pearson/coursework_one/` 下运行 `docker compose`。
   - 如果出现连接错误，先用 `docker ps` 检查容器是否在运行。
   - 如果 `docker-compose.yml` 有改动，其他人需要同步并重启容器。
+
 
 ## 5.2) Docker requirements & what we need to build / Docker 要求与是否需要自己构建
 
