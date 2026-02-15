@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import os
-from typing import Any, Optional
+import psycopg2
+from psycopg2.extensions import connection
 
 
-def get_db_connection() -> Optional[Any]:
+def get_db_connection() -> connection:
     """
-    Build a PostgreSQL connection from environment variables.
-    Returns None when no compatible postgres client package is installed.
+    Create a PostgreSQL connection using environment variables.
     """
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = int(os.getenv("POSTGRES_PORT", "5439"))
@@ -13,29 +15,11 @@ def get_db_connection() -> Optional[Any]:
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "postgres")
 
-    # Prefer psycopg v3, fallback to psycopg2 if available.
-    try:
-        import psycopg  # type: ignore
+    return psycopg2.connect(
+        host=host,
+        port=port,
+        dbname=dbname,
+        user=user,
+        password=password,
+    )
 
-        return psycopg.connect(
-            host=host,
-            port=port,
-            dbname=dbname,
-            user=user,
-            password=password,
-        )
-    except ModuleNotFoundError:
-        pass
-
-    try:
-        import psycopg2  # type: ignore
-
-        return psycopg2.connect(
-            host=host,
-            port=port,
-            dbname=dbname,
-            user=user,
-            password=password,
-        )
-    except ModuleNotFoundError:
-        return None
