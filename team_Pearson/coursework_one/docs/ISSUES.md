@@ -63,8 +63,8 @@ Design a scalable storage solution utilizing PostgreSQL and MinIO. Ensure that a
 - Extended `docker-compose` configurations if necessary.
 
 **Acceptance Criteria (Definition of Done):**
-- [ ] **PostgreSQL DDL:** Provide the SQL script to create `factor_observations` in `systematic_equity`. Must include a composite primary key (`symbol`, `as_of_date`, `factor_name`) and proper indexes.
-- [ ] **MinIO Data Lake Pathing:** Define the exact folder structure for raw unstructured files. Required format: `raw/{source_name}/{dataset_type}/as_of_date={YYYY-MM-DD}/run_date={YYYY-MM-DD}/`.
+- [ ] **PostgreSQL DDL:** Provide the SQL script to create `factor_observations` in `systematic_equity`. Must include a composite primary key (`symbol`, `observation_date`, `factor_name`) and proper indexes.
+- [ ] **MinIO Data Lake Pathing:** Define the exact folder structure for raw unstructured files. Required format: `raw/{source_name}/{dataset_type}/observation_date={YYYY-MM-DD}/run_date={YYYY-MM-DD}/`.
 - [ ] **Robustness:** The database design must be flexible enough to handle the addition or removal of companies from the `company_static` table.
 - [ ] **Containerization Compliance:** Ensure any additional components designed for the infrastructure (e.g., Kafka for streaming, Airflow for scheduling) are strictly containerized using Docker, extending the provided `docker-compose.yml`.
 

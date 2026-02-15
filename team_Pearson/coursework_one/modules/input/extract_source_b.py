@@ -12,7 +12,7 @@ def extract_source_b(
     return [
         {
             "symbol": symbol,
-            "as_of_date": run_date,
+            "observation_date": run_date,
             "factor_name": "source_b_metric",
             "factor_value": 2.0,
             "source": "source_b",

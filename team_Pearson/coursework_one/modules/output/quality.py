@@ -13,7 +13,7 @@ def run_quality_checks(records: List[Dict[str, Any]]) -> Dict[str, int]:
     for r in records:
         key = (
             r.get("symbol"),
-            r.get("as_of_date"),
+            r.get("observation_date"),
             r.get("factor_name"),
             r.get("source"),
         )

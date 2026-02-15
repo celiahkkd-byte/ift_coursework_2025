@@ -15,11 +15,16 @@ def get_db_connection() -> connection:
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "postgres")
 
-    return psycopg2.connect(
-        host=host,
-        port=port,
-        dbname=dbname,
-        user=user,
-        password=password,
-    )
-
+    try:
+        return psycopg2.connect(
+            host=host,
+            port=port,
+            dbname=dbname,
+            user=user,
+            password=password,
+        )
+    except psycopg2.OperationalError as e:
+        raise RuntimeError(
+            "PostgreSQL connection failed. Check Docker/Postgres is running and "
+            "POSTGRES_HOST/PORT/DB/USER/PASSWORD environment variables are correct."
+        ) from e

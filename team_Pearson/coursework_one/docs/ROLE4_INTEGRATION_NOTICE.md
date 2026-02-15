@@ -82,7 +82,7 @@ Do not modify others' modules or `Main.py` without agreement.
 ## 4) Minimum upstream schema / 上游最小字段要求（Role 6/7）
 Each record returned by `extract_source_a/b` must include / 每条记录至少包含:
 - `symbol`
-- `as_of_date`
+- `observation_date`
 - `factor_name`
 - `factor_value`
 - `source`

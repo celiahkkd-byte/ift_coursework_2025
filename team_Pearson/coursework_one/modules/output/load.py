@@ -14,18 +14,14 @@ def load_curated(records: List[Dict[str, Any]], dry_run: bool) -> int:
         return 0
 
     conn = get_db_connection()
-    if conn is None:
-        raise RuntimeError(
-            "PostgreSQL connector not available. Install psycopg/psycopg2 to enable DB loading."
-        )
 
     upsert_sql = """
         INSERT INTO systematic_equity.factor_observations (
-            symbol, as_of_date, factor_name, factor_value, source,
+            symbol, observation_date, factor_name, factor_value, source,
             metric_frequency, source_report_date, run_id
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (symbol, factor_name, as_of_date)
+        ON CONFLICT (symbol, factor_name, observation_date)
         DO UPDATE SET
             factor_value = EXCLUDED.factor_value,
             source = EXCLUDED.source,
@@ -43,7 +39,7 @@ def load_curated(records: List[Dict[str, Any]], dry_run: bool) -> int:
                     upsert_sql,
                     (
                         rec.get("symbol"),
-                        rec.get("as_of_date"),
+                        rec.get("observation_date"),
                         rec.get("factor_name"),
                         rec.get("factor_value"),
                         rec.get("source", "unknown"),
