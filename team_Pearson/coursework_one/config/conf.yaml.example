@@ -1,0 +1,64 @@
+# =============================================================================
+# conf.yaml — Project Configuration File
+# =============================================================================
+#
+# SETUP INSTRUCTIONS FOR TEAMMATES:
+#   1. Copy this file and rename the copy to: conf.yaml
+#   2. Replace YOUR_API_KEY_HERE with your real Alpha Vantage key
+#   3. Get a free key at: https://www.alphavantage.co/support/#api-key
+#   4. Never commit conf.yaml to GitHub (it is in .gitignore)
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Pipeline Settings
+# -----------------------------------------------------------------------------
+pipeline:
+  frequency: daily
+  backfill_years: 5
+  company_limit: 20
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+logging:
+  run_log_path: logs/pipeline_runs.jsonl
+
+# -----------------------------------------------------------------------------
+# Alpha Vantage API
+# -----------------------------------------------------------------------------
+api:
+  alpha_vantage_key: "YOUR_API_KEY_HERE"
+
+# -----------------------------------------------------------------------------
+# Companies to extract (add or remove tickers freely)
+# -----------------------------------------------------------------------------
+companies:
+  - AAPL    # Apple
+  - MSFT    # Microsoft
+  - GOOGL   # Alphabet (Google)
+  - AMZN    # Amazon
+  - JPM     # JPMorgan Chase
+
+# -----------------------------------------------------------------------------
+# MinIO Object Storage
+# Default credentials from docker-compose.yml
+# -----------------------------------------------------------------------------
+minio:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  bucket: "data-lake"
+  secure: false
+
+# -----------------------------------------------------------------------------
+# PostgreSQL Database
+# Default credentials from docker-compose.yml
+# -----------------------------------------------------------------------------
+database:
+  host: localhost
+  port: 5432
+  name: fift
+  schema: systematic_equity
+  user: postgres
+  password: postgres
