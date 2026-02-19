@@ -1,7 +1,56 @@
+# =============================================================================
+# conf.yaml — Project Configuration File
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Pipeline Settings (existing - from your teammates)
+# -----------------------------------------------------------------------------
 pipeline:
   frequency: daily
   backfill_years: 5
   company_limit: 20
 
+# -----------------------------------------------------------------------------
+# Logging (existing - from your teammates)
+# -----------------------------------------------------------------------------
 logging:
   run_log_path: logs/pipeline_runs.jsonl
+
+# -----------------------------------------------------------------------------
+# Alpha Vantage API (NEW - add this section)
+# -----------------------------------------------------------------------------
+api:
+  alpha_vantage_key: "YOUR_API_KEY_HERE"
+
+# -----------------------------------------------------------------------------
+# Companies to extract (NEW - add this section)
+# -----------------------------------------------------------------------------
+companies:
+  - AAPL    # Apple
+  - MSFT    # Microsoft
+  - GOOGL   # Alphabet (Google)
+  - AMZN    # Amazon
+  - JPM     # JPMorgan Chase
+
+# -----------------------------------------------------------------------------
+# MinIO Object Storage (NEW - add this section)
+# Default credentials from docker-compose.yml
+# -----------------------------------------------------------------------------
+minio:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  bucket: "data-lake"
+  secure: false
+
+# -----------------------------------------------------------------------------
+# PostgreSQL Database (NEW - add this section)
+# Default credentials from docker-compose.yml
+# -----------------------------------------------------------------------------
+database:
+  host: localhost
+  port: 5432
+  name: fift
+  schema: systematic_equity
+  user: postgres
+  password: postgres
