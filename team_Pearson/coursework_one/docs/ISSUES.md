@@ -37,6 +37,9 @@ Translate the investment factors defined by the PM into strict, technical data s
 **Outputs:**
 - Data Requirements Log mapping (`Business Metric` → `Raw Field` → `Origin Source` → `Target Storage` → `Frequency` → `Missing Rules`).
 - System architecture diagrams.
+- Data Lineage documentation
+- Data Dictionary
+- Data_catalog
 
 **Acceptance Criteria (Definition of Done):**
 - [ ] **Data Requirements Log:** Update `docs/data_requirements_log.md` with explicit missing data tolerance rules and look-ahead bias prevention.
@@ -64,6 +67,9 @@ Design a scalable storage solution utilizing PostgreSQL and MinIO. Ensure that a
 - [ ] **MinIO Data Lake Pathing:** Define the exact folder structure for raw unstructured files. Required format: `raw/{source_name}/{dataset_type}/observation_date={YYYY-MM-DD}/run_date={YYYY-MM-DD}/`.
 - [ ] **Robustness:** The database design must be flexible enough to handle the addition or removal of companies from the `company_static` table.
 - [ ] **Containerization Compliance:** Ensure any additional components designed for the infrastructure (e.g., Kafka for streaming, Airflow for scheduling) are strictly containerized using Docker, extending the provided `docker-compose.yml`.
+- [ ]  Retrieval Optimization:
+ - Ensure that the factor_observations table supports efficient retrieval by symbol and by observation year.
+ - Implement appropriate indexing strategies to optimize queries filtering by symbol, observation_date, and factor_name.
 
 ---
 
@@ -110,6 +116,13 @@ Develop a secure and reusable database connection module that reads the dynamic 
 - [ ] **Limit Parameter:** The function MUST support a `--company-limit` parameter to allow developers to pull a small subset of companies for fast local debugging.
 - [ ] **Sphinx Setup:** Run `sphinx-quickstart` to initialize the `/docs` directory. Configure `conf.py` (e.g., adding `myst_parser` for markdown support and `sphinx.ext.autodoc` to automatically extract Python docstrings).
 - [ ] **Documentation Build:** Ensure the command `make html` successfully builds the documentation site locally.
+- [ ]  Documentation Content Requirements:
+ - The Sphinx documentation must include:
+   * Installation Guide (environment setup, docker instructions).
+   * Usage Instructions (CLI examples with --run-date and --frequency).
+   * API Reference generated automatically via autodoc.
+   * Architecture Overview describing the data flow and storage design.
+ - Ensure the HTML documentation builds successfully using `make html`.
 
 ---
 
