@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Issue #1: [PM] Draft Investment Goals, Factor Definition &amp; Report Skeleton &#8212; IFT Coursework 2025_team_Pearson 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=2709fde1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="issue-1-pm-draft-investment-goals-factor-definition-report-skeleton">
+<h1>Issue #1: [PM] Draft Investment Goals, Factor Definition &amp; Report Skeleton<a class="headerlink" href="#issue-1-pm-draft-investment-goals-factor-definition-report-skeleton" title="Link to this heading">¶</a></h1>
+<p><strong>Assignee:</strong> Investment Product Owner (Role 1)
+<strong>Labels:</strong> <code class="docutils literal notranslate"><span class="pre">documentation</span></code>, <code class="docutils literal notranslate"><span class="pre">business-logic</span></code>, <code class="docutils literal notranslate"><span class="pre">report</span></code></p>
+<p><strong>Description:</strong>
+As the Product Owner, draft the foundational investment goals and define the core factors to guide the technical implementation. Furthermore, set up the official skeleton for the final 20,000-word Coursework One report to ensure all grading criteria are met from day one.</p>
+<p><strong>Inputs:</strong></p>
+<ul class="simple">
+<li><p>Investable Universe List (<code class="docutils literal notranslate"><span class="pre">company_static</span></code> table).</p></li>
+<li><p>Findings from external API research.</p></li>
+</ul>
+<p><strong>Outputs:</strong></p>
+<ul class="simple">
+<li><p>Factor definitions for CW2.</p></li>
+<li><p>Master template for the final UCL Turnitin report.</p></li>
+</ul>
+<p><strong>Acceptance Criteria (Definition of Done):</strong></p>
+<ul class="simple">
+<li><p>[ ] <strong>CW2 Factor Definition:</strong> Document the economic rationale, formula, and rebalancing frequency for the core factors (Dividend Yield, EBITDA Margin, Debt/Equity, P/B, Sentiment).</p></li>
+<li><p>[ ] <strong>Final Report Skeleton:</strong> Create the master template for the final report. It MUST contain these exact 5 sections:</p>
+<ol class="arabic simple">
+<li><p>Introduction</p></li>
+<li><p>Investment goals and needs from a data perspective</p></li>
+<li><p>Proposed solution &amp; vision: why, what and how this solution is implemented</p></li>
+<li><p>Architecture and infrastructure design (to be co-authored with Role 3)</p></li>
+<li><p>Conclusions</p></li>
+</ol>
+</li>
+<li><p>[ ] <strong>Presentation Prep:</strong> Outline the compelling presentation required to demonstrate how the product meets its intended goals.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="issue-2-requirements-define-data-requirements-log-architecture-diagrams">
+<h1>Issue #2: [Requirements] Define Data Requirements Log &amp; Architecture Diagrams<a class="headerlink" href="#issue-2-requirements-define-data-requirements-log-architecture-diagrams" title="Link to this heading">¶</a></h1>
+<p><strong>Assignee:</strong> Portfolio Product Specialist (Role 2)
+<strong>Labels:</strong> <code class="docutils literal notranslate"><span class="pre">documentation</span></code>, <code class="docutils literal notranslate"><span class="pre">requirements</span></code></p>
+<p><strong>Description:</strong>
+Translate the investment factors defined by the PM into strict, technical data specifications. Create high-level visual architecture diagrams to guide the engineering team.</p>
+<p><strong>Inputs:</strong></p>
+<ul class="simple">
+<li><p>The list of business factors defined by the PO.</p></li>
+</ul>
+<p><strong>Outputs:</strong></p>
+<ul class="simple">
+<li><p>Data Requirements Log mapping (<code class="docutils literal notranslate"><span class="pre">Business</span> <span class="pre">Metric</span></code> → <code class="docutils literal notranslate"><span class="pre">Raw</span> <span class="pre">Field</span></code> → <code class="docutils literal notranslate"><span class="pre">Origin</span> <span class="pre">Source</span></code> → <code class="docutils literal notranslate"><span class="pre">Target</span> <span class="pre">Storage</span></code> → <code class="docutils literal notranslate"><span class="pre">Frequency</span></code> → <code class="docutils literal notranslate"><span class="pre">Missing</span> <span class="pre">Rules</span></code>).</p></li>
+<li><p>System architecture diagrams.</p></li>
+<li><p>Data Lineage documentation</p></li>
+<li><p>Data Dictionary</p></li>
+<li><p>Data_catalog</p></li>
+</ul>
+<p><strong>Acceptance Criteria (Definition of Done):</strong></p>
+<ul class="simple">
+<li><p>[ ] <strong>Data Requirements Log:</strong> Update <code class="docutils literal notranslate"><span class="pre">docs/data_requirements_log.md</span></code> with explicit missing data tolerance rules and look-ahead bias prevention.</p></li>
+<li><p>[ ] <strong>Architecture Diagrams:</strong> Create high-level system architecture diagrams using <code class="docutils literal notranslate"><span class="pre">draw.io</span></code> or <code class="docutils literal notranslate"><span class="pre">lucidcharts</span></code> to visually map the data flow from External APIs / Internal DB → MinIO → PostgreSQL.</p></li>
+<li><p>[ ] <strong>Documentation Handoff:</strong> Ensure all requirement logs and diagrams are formatted in standard Markdown (<code class="docutils literal notranslate"><span class="pre">.md</span></code>) and handed over to the developer managing the Sphinx repository (Role 5) for integration.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="issue-3-architecture-design-db-schema-minio-partitioning-containerization">
+<h1>Issue #3: [Architecture] Design DB Schema, MinIO Partitioning &amp; Containerization<a class="headerlink" href="#issue-3-architecture-design-db-schema-minio-partitioning-containerization" title="Link to this heading">¶</a></h1>
+<p><strong>Assignee:</strong> Architecture &amp; Storage Designer (Role 3 / Developer)
+<strong>Labels:</strong> <code class="docutils literal notranslate"><span class="pre">database</span></code>, <code class="docutils literal notranslate"><span class="pre">architecture</span></code>, <code class="docutils literal notranslate"><span class="pre">docker</span></code></p>
+<p><strong>Description:</strong>
+Design a scalable storage solution utilizing PostgreSQL and MinIO. Ensure that any expanded infrastructure components comply with strict Docker containerization rules.</p>
+<p><strong>Inputs:</strong></p>
+<ul class="simple">
+<li><p>Data Requirements Log (from the Specialist).</p></li>
+</ul>
+<p><strong>Outputs:</strong></p>
+<ul class="simple">
+<li><p>PostgreSQL DDL scripts.</p></li>
+<li><p>MinIO Data Lake Pathing schema.</p></li>
+<li><p>Extended <code class="docutils literal notranslate"><span class="pre">docker-compose</span></code> configurations if necessary.</p></li>
+</ul>
+<p><strong>Acceptance Criteria (Definition of Done):</strong></p>
+<ul class="simple">
+<li><p>[ ] <strong>PostgreSQL DDL:</strong> Provide the SQL script to create <code class="docutils literal notranslate"><span class="pre">factor_observations</span></code> in <code class="docutils literal notranslate"><span class="pre">systematic_equity</span></code>. Must include a composite primary key (<code class="docutils literal notranslate"><span class="pre">symbol</span></code>, <code class="docutils literal notranslate"><span class="pre">observation_date</span></code>, <code class="docutils literal notranslate"><span class="pre">factor_name</span></code>) and proper indexes.</p></li>
+<li><p>[ ] <strong>MinIO Data Lake Pathing:</strong> Define the exact folder structure for raw unstructured files. Required format: <code class="docutils literal notranslate"><span class="pre">raw/{source_name}/{dataset_type}/observation_date={YYYY-MM-DD}/run_date={YYYY-MM-DD}/</span></code>.</p></li>
+<li><p>[ ] <strong>Robustness:</strong> The database design must be flexible enough to handle the addition or removal of companies from the <code class="docutils literal notranslate"><span class="pre">company_static</span></code> table.</p></li>
+<li><p>[ ] <strong>Containerization Compliance:</strong> Ensure any additional components designed for the infrastructure (e.g., Kafka for streaming, Airflow for scheduling) are strictly containerized using Docker, extending the provided <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code>.</p></li>
+<li><p>[ ]  Retrieval Optimization:</p></li>
+<li><p>Ensure that the factor_observations table supports efficient retrieval by symbol and by observation year.</p></li>
+<li><p>Implement appropriate indexing strategies to optimize queries filtering by symbol, observation_date, and factor_name.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="issue-4-integrator-establish-pipeline-skeleton-toolchain-strict-folder-structure">
+<h1>Issue #4: [Integrator] Establish Pipeline Skeleton, Toolchain &amp; Strict Folder Structure<a class="headerlink" href="#issue-4-integrator-establish-pipeline-skeleton-toolchain-strict-folder-structure" title="Link to this heading">¶</a></h1>
+<p><strong>Assignee:</strong> Pipeline Integrator (Role 4 / Developer)
+<strong>Labels:</strong> <code class="docutils literal notranslate"><span class="pre">infrastructure</span></code>, <code class="docutils literal notranslate"><span class="pre">toolchain</span></code></p>
+<p><strong>Description:</strong>
+Set up the fundamental project architecture using Poetry. Enforce the strict folder structure required by the coursework guidelines and configure the scheduling logic.</p>
+<p><strong>Inputs:</strong></p>
+<ul class="simple">
+<li><p>Architectural design specifications.</p></li>
+</ul>
+<p><strong>Outputs:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Main.py</span></code> with CLI.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> (Poetry).</p></li>
+<li><p>Initialized folder structure.</p></li>
+</ul>
+<p><strong>Acceptance Criteria (Definition of Done):</strong></p>
+<ul class="simple">
+<li><p>[ ] <strong>Toolchain Configuration:</strong> Initialize with <code class="docutils literal notranslate"><span class="pre">poetry</span> <span class="pre">init</span></code>. Configure <code class="docutils literal notranslate"><span class="pre">flake8</span></code>, <code class="docutils literal notranslate"><span class="pre">black</span></code>, <code class="docutils literal notranslate"><span class="pre">isort</span></code>, and <code class="docutils literal notranslate"><span class="pre">bandit</span></code> (or <code class="docutils literal notranslate"><span class="pre">safety</span></code>) for security scans.</p></li>
+<li><p>[ ] <strong>Strict Folder Structure:</strong> All developments MUST be placed under <code class="docutils literal notranslate"><span class="pre">team_&lt;insert</span> <span class="pre">your</span> <span class="pre">team</span> <span class="pre">id&gt;/coursework_one/</span></code> containing EXACTLY the following subfolders: <code class="docutils literal notranslate"><span class="pre">config/</span></code>, <code class="docutils literal notranslate"><span class="pre">modules/</span></code> (with <code class="docutils literal notranslate"><span class="pre">db/</span></code>, <code class="docutils literal notranslate"><span class="pre">input/</span></code>, <code class="docutils literal notranslate"><span class="pre">output/</span></code> sub-directories), <code class="docutils literal notranslate"><span class="pre">static/</span></code>, and <code class="docutils literal notranslate"><span class="pre">test/</span></code>.</p></li>
+<li><p>[ ] <strong>Database Isolation:</strong> Do NOT copy databases into other folders. Ensure any changes outside the group folder (e.g., <code class="docutils literal notranslate"><span class="pre">000.Database</span></code>) are un-staged before committing to Git.</p></li>
+<li><p>[ ] <strong>CLI &amp; Scheduling:</strong> <code class="docutils literal notranslate"><span class="pre">Main.py</span></code> must support <code class="docutils literal notranslate"><span class="pre">--run-date</span></code> and <code class="docutils literal notranslate"><span class="pre">--frequency</span></code>. Implement or mock a scheduling library (like <code class="docutils literal notranslate"><span class="pre">APScheduler</span></code> or <code class="docutils literal notranslate"><span class="pre">Airflow</span></code>) to satisfy the “Application Flexibility” requirement.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="issue-5-db-connectivity-implement-universe-extraction-layer-sphinx-docs">
+<h1>Issue #5: [DB Connectivity] Implement Universe Extraction Layer &amp; Sphinx Docs<a class="headerlink" href="#issue-5-db-connectivity-implement-universe-extraction-layer-sphinx-docs" title="Link to this heading">¶</a></h1>
+<p><strong>Assignee:</strong> Universe &amp; DB Connectivity Engineer (Role 5 / Developer)
+<strong>Labels:</strong> <code class="docutils literal notranslate"><span class="pre">database</span></code>, <code class="docutils literal notranslate"><span class="pre">core-module</span></code>, <code class="docutils literal notranslate"><span class="pre">documentation</span></code></p>
+<p><strong>Description:</strong>
+Develop a secure and reusable database connection module that reads the dynamic investable universe from the predefined PostgreSQL database. Additionally, initialize and configure the Sphinx documentation framework for the project.</p>
+<p><strong>Inputs:</strong></p>
+<ul class="simple">
+<li><p>PostgreSQL configuration details exposed via Docker.</p></li>
+</ul>
+<p><strong>Outputs:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">modules/db/db_connection.*</span></code></p></li>
+<li><p>Initialized Sphinx <code class="docutils literal notranslate"><span class="pre">/docs</span></code> directory.</p></li>
+</ul>
+<p><strong>Acceptance Criteria (Definition of Done):</strong></p>
+<ul class="simple">
+<li><p>[ ] <strong>Connection Manager:</strong> Implement a robust connection manager reading credentials securely from environment variables.</p></li>
+<li><p>[ ] <strong>Universe Retrieval:</strong> Implement a function <code class="docutils literal notranslate"><span class="pre">get_company_universe()</span></code> that dynamically fetches symbols (or <code class="docutils literal notranslate"><span class="pre">symbols</span></code>) from <code class="docutils literal notranslate"><span class="pre">systematic_equity.company_static</span></code>.</p></li>
+<li><p>[ ] <strong>Limit Parameter:</strong> The function MUST support a <code class="docutils literal notranslate"><span class="pre">--company-limit</span></code> parameter to allow developers to pull a small subset of companies for fast local debugging.</p></li>
+<li><p>[ ] <strong>Sphinx Setup:</strong> Run <code class="docutils literal notranslate"><span class="pre">sphinx-quickstart</span></code> to initialize the <code class="docutils literal notranslate"><span class="pre">/docs</span></code> directory. Configure <code class="docutils literal notranslate"><span class="pre">conf.py</span></code> (e.g., adding <code class="docutils literal notranslate"><span class="pre">myst_parser</span></code> for markdown support and <code class="docutils literal notranslate"><span class="pre">sphinx.ext.autodoc</span></code> to automatically extract Python docstrings).</p></li>
+<li><p>[ ] <strong>Documentation Build:</strong> Ensure the command <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">html</span></code> successfully builds the documentation site locally.</p></li>
+<li><p>[ ]  Documentation Content Requirements:</p></li>
+<li><p>The Sphinx documentation must include:</p>
+<ul>
+<li><p>Installation Guide (environment setup, docker instructions).</p></li>
+<li><p>Usage Instructions (CLI examples with –run-date and –frequency).</p></li>
+<li><p>API Reference generated automatically via autodoc.</p></li>
+<li><p>Architecture Overview describing the data flow and storage design.</p></li>
+</ul>
+</li>
+<li><p>Ensure the HTML documentation builds successfully using <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">html</span></code>.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="issue-6-extraction-ingest-structured-pricing-and-financial-data-to-minio">
+<h1>Issue #6: [Extraction] Ingest Structured Pricing and Financial Data to MinIO<a class="headerlink" href="#issue-6-extraction-ingest-structured-pricing-and-financial-data-to-minio" title="Link to this heading">¶</a></h1>
+<p><strong>Assignee:</strong> Extractor A (Role 6 / Developer)
+<strong>Labels:</strong> <code class="docutils literal notranslate"><span class="pre">data-ingestion</span></code>, <code class="docutils literal notranslate"><span class="pre">api</span></code></p>
+<p><strong>Description:</strong>
+Develop the data ingestion pipeline to pull historical structured pricing and financial data (Dividend, Debt, etc.) from external APIs and store it securely in the Data Lake.</p>
+<p><strong>Inputs:</strong></p>
+<ul class="simple">
+<li><p>Company list from <code class="docutils literal notranslate"><span class="pre">get_company_universe()</span></code>.</p></li>
+</ul>
+<p><strong>Outputs:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">modules/input/extract_source_a.py</span></code>.</p></li>
+</ul>
+<p><strong>Acceptance Criteria (Definition of Done):</strong></p>
+<ul class="simple">
+<li><p>[ ] <strong>Extraction Logic:</strong> Successfully call an external API (e.g., <code class="docutils literal notranslate"><span class="pre">yfinance</span></code>) to extract Adjusted Close Price, Dividends, and Total Debt.</p></li>
+<li><p>[ ] <strong>Historical Depth:</strong> Must successfully retrieve past data (at least 5 years) for the given universe.</p></li>
+<li><p>[ ] <strong>Raw Storage:</strong> Persistently serialize the raw API responses into MinIO, strictly adhering to the <code class="docutils literal notranslate"><span class="pre">raw/{source}/...</span></code> pathing specifications.</p></li>
+<li><p>[ ] <strong>Error Handling:</strong> Implement robust retry logic and rate-limit avoidance (e.g., <code class="docutils literal notranslate"><span class="pre">time.sleep()</span></code>) to prevent HTTP 429 bans.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="issue-7-extraction-ingest-unstructured-news-calculate-sentiment">
+<h1>Issue #7: [Extraction] Ingest Unstructured News &amp; Calculate Sentiment<a class="headerlink" href="#issue-7-extraction-ingest-unstructured-news-calculate-sentiment" title="Link to this heading">¶</a></h1>
+<p><strong>Assignee:</strong> Extractor B (Role 7 / Developer)
+<strong>Labels:</strong> <code class="docutils literal notranslate"><span class="pre">data-ingestion</span></code>, <code class="docutils literal notranslate"><span class="pre">alternative-data</span></code></p>
+<p><strong>Description:</strong>
+Enhance the dataset by ingesting unstructured alternative data (news headlines) to compute the Sentiment risk factor.</p>
+<p><strong>Inputs:</strong></p>
+<ul class="simple">
+<li><p>Company list from <code class="docutils literal notranslate"><span class="pre">get_company_universe()</span></code>.</p></li>
+</ul>
+<p><strong>Outputs:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">modules/input/extract_source_b.py</span></code>.</p></li>
+</ul>
+<p><strong>Acceptance Criteria (Definition of Done):</strong></p>
+<ul class="simple">
+<li><p>[ ] <strong>Extraction Logic:</strong> Call an external news API (e.g., Alpha Vantage News Sentiment) to scrape raw news text related to the target companies.</p></li>
+<li><p>[ ] <strong>Raw Storage:</strong> Persistently store the raw JSON news payloads into MinIO.</p></li>
+<li><p>[ ] <strong>Sentiment Computation:</strong> Implement NLP scoring logic to calculate a normalized daily <code class="docutils literal notranslate"><span class="pre">sentiment_score</span></code> (-1.0 to 1.0) over a rolling 30-day window.</p></li>
+<li><p>[ ] <strong>Fallback Logic:</strong> If no news exists for a 30-day window, the function must handle the empty state gracefully and return <code class="docutils literal notranslate"><span class="pre">0.0</span></code>.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="issue-8-etl-qa-normalize-data-enforce-quality-achieve-80-pytest-coverage">
+<h1>Issue #8: [ETL &amp; QA] Normalize Data, Enforce Quality &amp; Achieve 80% pytest Coverage<a class="headerlink" href="#issue-8-etl-qa-normalize-data-enforce-quality-achieve-80-pytest-coverage" title="Link to this heading">¶</a></h1>
+<p><strong>Assignee:</strong> Transform, Quality &amp; Tests Anchor (Role 8 / Developer)
+<strong>Labels:</strong> <code class="docutils literal notranslate"><span class="pre">testing</span></code>, <code class="docutils literal notranslate"><span class="pre">data-processing</span></code></p>
+<p><strong>Description:</strong>
+Transform the raw MinIO data and internal database fields into the curated PostgreSQL table. Enforce strict data quality standards and ensure the entire codebase meets the academic 80% test coverage requirement.</p>
+<p><strong>Inputs:</strong></p>
+<ul class="simple">
+<li><p>Raw data stored in MinIO.</p></li>
+<li><p>Internal fundamentals from PostgreSQL.</p></li>
+</ul>
+<p><strong>Outputs:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">modules/transform/normalize.py</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modules/quality/checks.py</span></code>.</p></li>
+<li><p>Comprehensive <code class="docutils literal notranslate"><span class="pre">pytest</span></code> test suite.</p></li>
+</ul>
+<p><strong>Acceptance Criteria (Definition of Done):</strong></p>
+<ul class="simple">
+<li><p>[ ] <strong>Normalization Logic:</strong> Implement the computation for hybrid factors (EBITDA Margin, P/B Ratio, Debt/Equity) merging internal SQL data with external API data.</p></li>
+<li><p>[ ] <strong>Quality Rules Engine:</strong> Programmatically enforce the rules defined in Issue #2 (e.g., look-ahead bias prevention, maximum 12-month staleness drops).</p></li>
+<li><p>[ ] <strong>Coverage Red Line:</strong> Execute tests using <code class="docutils literal notranslate"><span class="pre">poetry</span> <span class="pre">run</span> <span class="pre">pytest</span> <span class="pre">./tests/</span></code> and achieve a minimum of <strong>80% code coverage</strong>.</p></li>
+<li><p>[ ] <strong>E2E Integration Test:</strong> Automate the execution of the Architect’s two required queries to assert that row counts, time ranges, and unique keys are valid and non-duplicated.</p></li>
+<li><p>[ ] <strong>Git Submission Compliance:</strong> Ensure the final code is pushed to branch <code class="docutils literal notranslate"><span class="pre">feature/coursework_one_&lt;YOUR_TEAM_ID&gt;</span></code> before creating the PR for <code class="docutils literal notranslate"><span class="pre">&#64;uceslc0</span></code>.</p></li>
+</ul>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">IFT Coursework 2025_team_Pearson</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">📄 usage.md</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">📄 architecture.md</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">modules</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Team Pearson.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.4</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/ISSUES.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

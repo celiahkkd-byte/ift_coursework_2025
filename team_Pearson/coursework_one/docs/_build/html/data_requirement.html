@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Data Requirements Log &#8212; IFT Coursework 2025_team_Pearson 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=2709fde1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="data-requirements-log">
+<h1>Data Requirements Log<a class="headerlink" href="#data-requirements-log" title="Link to this heading">¶</a></h1>
+<p><strong>Strategy:</strong> Quality, Dividend &amp; Sentiment Composite Strategy
+<strong>History Requirement:</strong> Minimum 5 years backfill
+<strong>Query Requirement:</strong> Must support retrieval by company and by year</p>
+<hr class="docutils" />
+<section id="dividend-yield">
+<h2>1. Dividend Yield<a class="headerlink" href="#dividend-yield" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Specification</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Metric Name</p></td>
+<td><p>Dividend Yield</p></td>
+</tr>
+<tr class="row-odd"><td><p>Raw Fields</p></td>
+<td><p>Dividend Per Share (DPS), Adjusted Close Price</p></td>
+</tr>
+<tr class="row-even"><td><p>Origin Source (Input)</p></td>
+<td><p>External API (<code class="docutils literal notranslate"><span class="pre">yfinance</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Target Storage (Output)</p></td>
+<td><p>PostgreSQL (<code class="docutils literal notranslate"><span class="pre">systematic_equity.factor_observations</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>Frequency</p></td>
+<td><p>Monthly (computed using latest available dividend at month-end)</p></td>
+</tr>
+<tr class="row-odd"><td><p>History</p></td>
+<td><p>≥ 5 years</p></td>
+</tr>
+<tr class="row-even"><td><p>Calculation Logic</p></td>
+<td><p>Dividend Yield = (Trailing 12-Month Total DPS) / Price</p></td>
+</tr>
+</tbody>
+</table>
+<section id="missing-error-tolerance-quality-rules">
+<h3>Missing / Error Tolerance &amp; Quality Rules<a class="headerlink" href="#missing-error-tolerance-quality-rules" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Look-ahead Bias Prevention:</strong> Price must be queried strictly backward-looking. Use the exact date’s close. If the exact date falls on a weekend/holiday, fall back to the most recent trading day, <strong>maximum 3 trading days prior (-3 to 0 days)</strong>. Future prices (+1 to +3 days) are strictly forbidden.</p></li>
+<li><p><strong>Missing DPS Tolerance:</strong> If dividend history is missing or no dividends were declared within the last 12 months, do NOT drop the observation. Set <code class="docutils literal notranslate"><span class="pre">Dividend</span> <span class="pre">Yield</span> <span class="pre">=</span> <span class="pre">0.0</span></code>.</p></li>
+<li><p><strong>Missing Price Tolerance:</strong> If <code class="docutils literal notranslate"><span class="pre">Adjusted</span> <span class="pre">Close</span> <span class="pre">Price</span></code> is missing, NaN, or ≤ 0 after the 3-day backward look, <strong>DROP</strong> the observation for that specific date to avoid zero-division errors.</p></li>
+<li><p><strong>Quality Auditing:</strong> Log a warning (<code class="docutils literal notranslate"><span class="pre">flag_stale_price</span> <span class="pre">=</span> <span class="pre">True</span></code>) if a price older than 1 trading day is used.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="ebitda-margin-profitability-factor">
+<h2>2. EBITDA Margin (Profitability Factor)<a class="headerlink" href="#ebitda-margin-profitability-factor" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Specification</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Metric Name</p></td>
+<td><p>EBITDA Margin</p></td>
+</tr>
+<tr class="row-odd"><td><p>Raw Fields</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">enterprise_ebitda</span></code>, <code class="docutils literal notranslate"><span class="pre">enterprise_revenue</span></code>, <code class="docutils literal notranslate"><span class="pre">end_date</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Origin Source (Input)</p></td>
+<td><p>Internal PostgreSQL (<code class="docutils literal notranslate"><span class="pre">systematic_equity</span></code> static tables)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Target Storage (Output)</p></td>
+<td><p>PostgreSQL (<code class="docutils literal notranslate"><span class="pre">systematic_equity.factor_observations</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>Frequency</p></td>
+<td><p>Quarterly/Annual (aligned with internal table updates)</p></td>
+</tr>
+<tr class="row-odd"><td><p>History</p></td>
+<td><p>≥ 5 years</p></td>
+</tr>
+<tr class="row-even"><td><p>Calculation Logic</p></td>
+<td><p>EBITDA Margin = <code class="docutils literal notranslate"><span class="pre">enterprise_ebitda</span></code> / <code class="docutils literal notranslate"><span class="pre">enterprise_revenue</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<section id="id1">
+<h3>Missing / Error Tolerance &amp; Quality Rules<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Negative Revenue:</strong> If <code class="docutils literal notranslate"><span class="pre">enterprise_revenue</span></code> ≤ 0, <strong>DROP</strong> the observation (margins on zero/negative revenue are mathematically meaningless).</p></li>
+<li><p><strong>Missing Values:</strong> If either <code class="docutils literal notranslate"><span class="pre">enterprise_ebitda</span></code> or <code class="docutils literal notranslate"><span class="pre">enterprise_revenue</span></code> is NULL/NaN, <strong>DROP</strong> the observation. Do not attempt to impute EBITDA.</p></li>
+<li><p><strong>Staleness Limit:</strong> Data from the internal table must be forward-filled on a daily/monthly basis for portfolio alignment. The maximum allowed staleness from the internal <code class="docutils literal notranslate"><span class="pre">end_date</span></code> is <strong>12 months</strong>.</p></li>
+<li><p><strong>Expiration:</strong> If the latest available <code class="docutils literal notranslate"><span class="pre">end_date</span></code> is older than 12 months relative to the calculation date, <strong>DROP</strong> the observation and log a <code class="docutils literal notranslate"><span class="pre">Data_Expired</span></code> flag.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="debt-equity-ratio-financial-health-factor">
+<h2>3. Debt/Equity Ratio (Financial Health Factor)<a class="headerlink" href="#debt-equity-ratio-financial-health-factor" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Specification</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Metric Name</p></td>
+<td><p>Debt/Equity</p></td>
+</tr>
+<tr class="row-odd"><td><p>Raw Fields</p></td>
+<td><p>Total Debt (Short-term + Long-term), <code class="docutils literal notranslate"><span class="pre">book_value</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Origin Source (Input)</p></td>
+<td><p><strong>Mixed:</strong> External API (<code class="docutils literal notranslate"><span class="pre">yfinance</span></code> for Debt) + Internal PostgreSQL (<code class="docutils literal notranslate"><span class="pre">book_value</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Target Storage (Output)</p></td>
+<td><p>PostgreSQL (<code class="docutils literal notranslate"><span class="pre">systematic_equity.factor_observations</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>Frequency</p></td>
+<td><p>Quarterly</p></td>
+</tr>
+<tr class="row-odd"><td><p>History</p></td>
+<td><p>≥ 5 years</p></td>
+</tr>
+<tr class="row-even"><td><p>Calculation Logic</p></td>
+<td><p>Debt/Equity = Total Debt / <code class="docutils literal notranslate"><span class="pre">book_value</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<section id="id2">
+<h3>Missing / Error Tolerance &amp; Quality Rules<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Missing Debt Fallback:</strong> If <code class="docutils literal notranslate"><span class="pre">Total</span> <span class="pre">Debt</span></code> is missing directly from the API, attempt to calculate it as <code class="docutils literal notranslate"><span class="pre">Short-term</span> <span class="pre">Debt</span> <span class="pre">+</span> <span class="pre">Long-term</span> <span class="pre">Debt</span></code>. If both are missing, <strong>DROP</strong> the observation.</p></li>
+<li><p><strong>Negative Equity:</strong> If internal <code class="docutils literal notranslate"><span class="pre">book_value</span></code> ≤ 0, <strong>DROP</strong> the observation. Highly distressed companies with negative equity produce misleading D/E ratios.</p></li>
+<li><p><strong>Cross-Source Staleness Limit:</strong> External Debt and Internal Book Value may be published on different dates. Both components may be forward-filled up to a maximum of <strong>9 months</strong> from their respective report dates.</p></li>
+<li><p><strong>Interpolation:</strong> Strict <strong>NO</strong>. Step-forward fill only.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="price-to-book-ratio-p-b-valuation-factor">
+<h2>4. Price-to-Book Ratio (P/B) (Valuation Factor)<a class="headerlink" href="#price-to-book-ratio-p-b-valuation-factor" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Specification</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Metric Name</p></td>
+<td><p>P/B Ratio</p></td>
+</tr>
+<tr class="row-odd"><td><p>Raw Fields</p></td>
+<td><p>Adjusted Close Price, <code class="docutils literal notranslate"><span class="pre">outstanding_shares</span></code>, <code class="docutils literal notranslate"><span class="pre">book_value</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Origin Source (Input)</p></td>
+<td><p><strong>Mixed:</strong> External API (<code class="docutils literal notranslate"><span class="pre">Price</span></code>) + Internal PostgreSQL (<code class="docutils literal notranslate"><span class="pre">outstanding_shares</span></code>, <code class="docutils literal notranslate"><span class="pre">book_value</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Target Storage (Output)</p></td>
+<td><p>PostgreSQL (<code class="docutils literal notranslate"><span class="pre">systematic_equity.factor_observations</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>Frequency</p></td>
+<td><p>Monthly</p></td>
+</tr>
+<tr class="row-odd"><td><p>History</p></td>
+<td><p>≥ 5 years</p></td>
+</tr>
+<tr class="row-even"><td><p>Calculation Logic</p></td>
+<td><p>P/B = (Price * <code class="docutils literal notranslate"><span class="pre">outstanding_shares</span></code>) / <code class="docutils literal notranslate"><span class="pre">book_value</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<section id="id3">
+<h3>Missing / Error Tolerance &amp; Quality Rules<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Look-ahead Bias Prevention:</strong> Price must strictly utilize the [-3 to 0 days] backward-looking rule.</p></li>
+<li><p><strong>Negative Equity:</strong> If internal <code class="docutils literal notranslate"><span class="pre">book_value</span></code> ≤ 0, <strong>DROP</strong> the observation.</p></li>
+<li><p><strong>Missing Shares:</strong> If <code class="docutils literal notranslate"><span class="pre">outstanding_shares</span></code> is missing, NaN, or ≤ 0, <strong>DROP</strong> the observation (market cap cannot be calculated).</p></li>
+<li><p><strong>Staleness Limit:</strong> Internal fundamental data (<code class="docutils literal notranslate"><span class="pre">book_value</span></code>, <code class="docutils literal notranslate"><span class="pre">outstanding_shares</span></code>) may be forward-filled up to <strong>12 months</strong>.</p></li>
+<li><p><strong>Extreme Values Cap:</strong> Cap P/B ratios at the 99th percentile (e.g., P/B &gt; 100) to prevent data anomalies from skewing Z-score calculations in Coursework 2.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="news-sentiment-score-alternative-risk-factor">
+<h2>5. News Sentiment Score (Alternative Risk Factor)<a class="headerlink" href="#news-sentiment-score-alternative-risk-factor" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Specification</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Metric Name</p></td>
+<td><p>News Sentiment</p></td>
+</tr>
+<tr class="row-odd"><td><p>Raw Fields</p></td>
+<td><p>Article Sentiment Score, Timestamp</p></td>
+</tr>
+<tr class="row-even"><td><p>Origin Source (Input)</p></td>
+<td><p>External API (e.g., Alpha Vantage <code class="docutils literal notranslate"><span class="pre">NEWS_SENTIMENT</span></code> or NewsAPI)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Target Storage (Output)</p></td>
+<td><p>MinIO (Raw JSON) → PostgreSQL (<code class="docutils literal notranslate"><span class="pre">factor_observations</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>Frequency</p></td>
+<td><p>Daily (aggregated to monthly for portfolio rebalancing)</p></td>
+</tr>
+<tr class="row-odd"><td><p>History</p></td>
+<td><p>≥ 5 years (where available depending on API limits)</p></td>
+</tr>
+<tr class="row-even"><td><p>Calculation Logic</p></td>
+<td><p>Simple Average of sentiment scores over a rolling 30-day window.</p></td>
+</tr>
+</tbody>
+</table>
+<section id="id4">
+<h3>Missing / Error Tolerance &amp; Quality Rules<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Zero News Fallback:</strong> If NO news articles are found for a given company within the trailing 30-day window, <strong>DO NOT DROP</strong> the observation. Assign a neutral sentiment score of <strong>0.0</strong>.</p></li>
+<li><p><strong>Data Capping:</strong> Hard cap all computed sentiment scores to a range of <code class="docutils literal notranslate"><span class="pre">[-1.0,</span> <span class="pre">1.0]</span></code>.</p></li>
+<li><p><strong>Audit Logging:</strong> The system must record <code class="docutils literal notranslate"><span class="pre">article_count_30d</span></code> as a secondary metadata column alongside the score to distinguish between a “0.0 due to no news” vs a “0.0 due to mixed news”.</p></li>
+</ul>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="system-level-acceptance-criteria-definition-of-done">
+<h1>System-Level Acceptance Criteria (Definition of Done)<a class="headerlink" href="#system-level-acceptance-criteria-definition-of-done" title="Link to this heading">¶</a></h1>
+<p>The pipeline and infrastructure must pass the following verifiable automated criteria before pull requests can be merged.</p>
+<section id="data-coverage-integrity-tests-pytest">
+<h2>1. Data Coverage &amp; Integrity Tests (<code class="docutils literal notranslate"><span class="pre">pytest</span></code>)<a class="headerlink" href="#data-coverage-integrity-tests-pytest" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Historical Depth:</strong> Pipeline must successfully backfill and persist ≥ 5 years of data for at least 3 test companies without throwing unhandled exceptions.</p></li>
+<li><p><strong>Missing Data Enforcement:</strong> Unit tests must inject mocked stale data (e.g., Book Value &gt; 12 months old) and explicitly assert that the ETL pipeline drops the observation.</p></li>
+<li><p><strong>Test Coverage Red Line:</strong> The <code class="docutils literal notranslate"><span class="pre">pytest</span></code> suite running over the <code class="docutils literal notranslate"><span class="pre">transform</span></code> and <code class="docutils literal notranslate"><span class="pre">quality</span></code> modules must achieve a minimum of <strong>80% code coverage</strong>.</p></li>
+</ul>
+</section>
+<section id="query-capability-indexing">
+<h2>2. Query Capability &amp; Indexing<a class="headerlink" href="#query-capability-indexing" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>EAV / Long Table Pattern:</strong> The <code class="docutils literal notranslate"><span class="pre">factor_observations</span></code> schema must be designed as a “long table” (e.g., <code class="docutils literal notranslate"><span class="pre">symbol</span></code>, <code class="docutils literal notranslate"><span class="pre">observation_date</span></code>, <code class="docutils literal notranslate"><span class="pre">factor_name</span></code>, <code class="docutils literal notranslate"><span class="pre">factor_value</span></code>) rather than a wide table, satisfying the requirement that <em>adding a new metric must not require a schema ALTER operation</em>.</p></li>
+<li><p><strong>Performance:</strong> B-Tree indexes must be applied to <code class="docutils literal notranslate"><span class="pre">symbol</span></code> and <code class="docutils literal notranslate"><span class="pre">observation_date</span></code>. The database must support sub-second query execution times for:</p>
+<ol class="arabic simple">
+<li><p>Retrieving all metrics for a single <code class="docutils literal notranslate"><span class="pre">symbol</span></code> over a 5-year period.</p></li>
+<li><p>Retrieving a specific <code class="docutils literal notranslate"><span class="pre">factor_name</span></code> across all companies for a given calendar year.</p></li>
+</ol>
+</li>
+</ul>
+</section>
+<section id="pipeline-robustness-fault-tolerance">
+<h2>3. Pipeline Robustness &amp; Fault Tolerance<a class="headerlink" href="#pipeline-robustness-fault-tolerance" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Dynamic Universe:</strong> The pipeline must dynamically query <code class="docutils literal notranslate"><span class="pre">systematic_equity.company_static</span></code> at runtime. Adding or removing a symbol from this table must immediately reflect in the pipeline’s execution loop without requiring codebase changes.</p></li>
+<li><p><strong>Idempotency &amp; Uniqueness:</strong> The pipeline must be idempotent. Rerunning the pipeline for the same date range must not duplicate data. PostgreSQL must utilize a composite Unique Constraint (<code class="docutils literal notranslate"><span class="pre">symbol</span></code>, <code class="docutils literal notranslate"><span class="pre">factor_name</span></code>, <code class="docutils literal notranslate"><span class="pre">observation_date</span></code>) combined with an <code class="docutils literal notranslate"><span class="pre">INSERT</span> <span class="pre">...</span> <span class="pre">ON</span> <span class="pre">CONFLICT</span> <span class="pre">DO</span> <span class="pre">UPDATE</span></code> (Upsert) strategy.</p></li>
+<li><p><strong>Non-Blocking Execution:</strong> If the API request for <code class="docutils literal notranslate"><span class="pre">company</span> <span class="pre">A</span></code> fails (e.g., HTTP 404 or 500), the pipeline must catch the exception, log the error trace to a <code class="docutils literal notranslate"><span class="pre">pipeline_runs</span></code> audit table, and seamlessly continue processing <code class="docutils literal notranslate"><span class="pre">company</span> <span class="pre">B</span></code>.</p></li>
+</ul>
+</section>
+<section id="quality-auditability">
+<h2>4. Quality Auditability<a class="headerlink" href="#quality-auditability" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Lineage Tracing:</strong> Every row in the curated PostgreSQL table must include a <code class="docutils literal notranslate"><span class="pre">run_id</span></code> or <code class="docutils literal notranslate"><span class="pre">updated_at</span></code> timestamp linking it back to the specific execution batch that fetched the raw data from MinIO.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">IFT Coursework 2025_team_Pearson</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">📄 usage.md</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">📄 architecture.md</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">modules</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Team Pearson.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.4</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/data_requirement.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

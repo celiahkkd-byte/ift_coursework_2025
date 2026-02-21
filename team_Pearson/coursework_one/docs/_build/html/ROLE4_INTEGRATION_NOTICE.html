@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>CW1 Integration Notice / 对接通知 (Role 4 Integrator) &#8212; IFT Coursework 2025_team_Pearson 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=2709fde1"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="cw1-integration-notice-role-4-integrator">
+<h1>CW1 Integration Notice / 对接通知 (Role 4 Integrator)<a class="headerlink" href="#cw1-integration-notice-role-4-integrator" title="Link to this heading">¶</a></h1>
+<p>Audience / 适用对象: Roles 3, 5, 6, 7, 8<br />
+Goal / 目标: Parallel development with low conflict and fast merge to team branch / 并行开发、低冲突、快速合流</p>
+<section id="first-time-setup">
+<h2>0) First-time setup / 首次同步（先做这个）<a class="headerlink" href="#first-time-setup" title="Link to this heading">¶</a></h2>
+<p>If you do not have the repo locally yet / 如果你本地还没有仓库:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/celiahkkd-byte/ift_coursework_2025.git
+<span class="nb">cd</span><span class="w"> </span>ift_coursework_2025
+git<span class="w"> </span>checkout<span class="w"> </span>feature/coursework_one_Team_04_Pearson
+git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>feature/coursework_one_Team_04_Pearson
+</pre></div>
+</div>
+<p>If you already cloned before / 如果你之前已经克隆过:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>ift_coursework_2025
+git<span class="w"> </span>checkout<span class="w"> </span>feature/coursework_one_Team_04_Pearson
+git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>feature/coursework_one_Team_04_Pearson
+</pre></div>
+</div>
+<p>Important / 重点说明:</p>
+<ul class="simple">
+<li><p>“Go to project directory” means your own local <code class="docutils literal notranslate"><span class="pre">ift_coursework_2025</span></code>, not someone else’s computer.</p></li>
+<li><p>“进入项目目录”指的是你自己电脑上的 <code class="docutils literal notranslate"><span class="pre">ift_coursework_2025</span></code>，不是别人电脑里的目录。</p></li>
+<li><p>Everyone syncs from the same team branch above, then creates their own role branch.</p></li>
+<li><p>每个人都先同步同一个团队分支，再创建自己的角色分支开发。</p></li>
+</ul>
+</section>
+<section id="branch-workflow">
+<h2>1) Branch workflow / 分支流程（必须）<a class="headerlink" href="#branch-workflow" title="Link to this heading">¶</a></h2>
+<p>Run from repo root <code class="docutils literal notranslate"><span class="pre">ift_coursework_2025/</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>checkout<span class="w"> </span>feature/coursework_one_Team_04_Pearson
+git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>feature/coursework_one_Team_04_Pearson
+git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>feature/cw1-role6-source-a
+</pre></div>
+</div>
+<p>Branch naming / 分支命名:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">feature/cw1-role&lt;id&gt;-&lt;module&gt;</span></code></p></li>
+<li><p>examples: <code class="docutils literal notranslate"><span class="pre">feature/cw1-role5-universe-db</span></code>, <code class="docutils literal notranslate"><span class="pre">feature/cw1-role8-normalize-quality</span></code></p></li>
+</ul>
+<p>After coding / 开发完成后:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>add<span class="w"> </span>&lt;your<span class="w"> </span>files&gt;
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;roleX: &lt;change summary&gt;&quot;</span>
+git<span class="w"> </span>push<span class="w"> </span>-u<span class="w"> </span>origin<span class="w"> </span>&lt;your<span class="w"> </span>branch&gt;
+</pre></div>
+</div>
+<p>Open PR to / 发 PR 到:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">feature/coursework_one_Team_04_Pearson</span></code></p></li>
+<li><p>Do NOT open PR to <code class="docutils literal notranslate"><span class="pre">main</span></code>.</p></li>
+<li><p>不要把 PR 的目标分支选成 <code class="docutils literal notranslate"><span class="pre">main</span></code>。</p></li>
+</ul>
+</section>
+<section id="file-ownership">
+<h2>2) File ownership / 文件归属（只改自己的）<a class="headerlink" href="#file-ownership" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Role 5: <code class="docutils literal notranslate"><span class="pre">modules/db/*</span></code></p></li>
+<li><p>Role 6: <code class="docutils literal notranslate"><span class="pre">modules/input/extract_source_a.py</span></code></p></li>
+<li><p>Role 7: <code class="docutils literal notranslate"><span class="pre">modules/input/extract_source_b.py</span></code></p></li>
+<li><p>Role 8: <code class="docutils literal notranslate"><span class="pre">modules/output/normalize.py</span></code> and <code class="docutils literal notranslate"><span class="pre">modules/output/quality.py</span></code></p></li>
+<li><p>Role 3: <code class="docutils literal notranslate"><span class="pre">modules/output/load.py</span></code></p></li>
+<li><p>Role 4 (Integrator): <code class="docutils literal notranslate"><span class="pre">Main.py</span></code> and integration flow</p></li>
+</ul>
+<section id="output-db-infra-ownership-output">
+<h3>2.1 Output/DB infra ownership / Output与数据库基础设施分工补充<a class="headerlink" href="#output-db-infra-ownership-output" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Role 3 (primary): Output persistence implementation</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/modules/output/load.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sql/init.sql</span></code> (upsert rules, indexes, constraints; if this file is used in your repo structure)</p></li>
+</ul>
+</li>
+<li><p>Role 5 (support): Validate SQL compatibility with existing DB schema and company universe tables</p></li>
+<li><p>Role 4 (primary for integration safety): Global runtime/config wiring</p></li>
+</ul>
+<p>Do not modify others’ modules or <code class="docutils literal notranslate"><span class="pre">Main.py</span></code> without agreement.<br />
+未经沟通，不要改别人模块和 <code class="docutils literal notranslate"><span class="pre">Main.py</span></code>。</p>
+</section>
+</section>
+<section id="fixed-interface-contracts">
+<h2>3) Fixed interface contracts / 固定接口契约（函数名不可改）<a class="headerlink" href="#fixed-interface-contracts" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">modules.db.get_company_universe(company_limit:</span> <span class="pre">int)</span> <span class="pre">-&gt;</span> <span class="pre">list[str]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modules.input.extract_source_a(symbols,</span> <span class="pre">run_date,</span> <span class="pre">backfill_years,</span> <span class="pre">frequency)</span> <span class="pre">-&gt;</span> <span class="pre">list[dict]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modules.input.extract_source_b(symbols,</span> <span class="pre">run_date,</span> <span class="pre">backfill_years,</span> <span class="pre">frequency)</span> <span class="pre">-&gt;</span> <span class="pre">list[dict]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modules.output.normalize_records(records)</span> <span class="pre">-&gt;</span> <span class="pre">list[dict]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modules.output.run_quality_checks(records)</span> <span class="pre">-&gt;</span> <span class="pre">dict</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modules.output.load_curated(records,</span> <span class="pre">dry_run:</span> <span class="pre">bool)</span> <span class="pre">-&gt;</span> <span class="pre">int</span></code></p></li>
+</ol>
+</section>
+<section id="minimum-upstream-schema-role-6-7">
+<h2>4) Minimum upstream schema / 上游最小字段要求（Role 6/7）<a class="headerlink" href="#minimum-upstream-schema-role-6-7" title="Link to this heading">¶</a></h2>
+<p>Each record returned by <code class="docutils literal notranslate"><span class="pre">extract_source_a/b</span></code> must include / 每条记录至少包含:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">symbol</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">observation_date</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">factor_name</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">factor_value</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">source</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">metric_frequency</span></code> (<code class="docutils literal notranslate"><span class="pre">daily|monthly|quarterly|annual</span></code>)</p></li>
+</ul>
+<p>Recommended for staleness control / 为了时效性控制，强烈建议增加:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">source_report_date</span></code></p></li>
+</ul>
+</section>
+<section id="mixed-frequency-policy">
+<h2>4.1) Mixed-frequency policy / 混合频率处理规则（必须遵守）<a class="headerlink" href="#mixed-frequency-policy" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--frequency</span></code> is pipeline run frequency, not the natural frequency of each metric.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--frequency</span></code> 是流水线运行频率，不等于每个因子的天然发布频率。</p></li>
+<li><p>Each row must carry its own <code class="docutils literal notranslate"><span class="pre">metric_frequency</span></code>.</p></li>
+<li><p>每条记录必须标注自己的 <code class="docutils literal notranslate"><span class="pre">metric_frequency</span></code>。</p></li>
+<li><p>Low-frequency factors (quarterly/annual) must use step-forward fill with staleness limits; do not fake daily “new” fundamentals.</p></li>
+<li><p>低频因子（季/年）在高频运行中必须使用前值延续并遵守过期阈值，不能伪造“每日新财报”。</p></li>
+<li><p>High-frequency factors (daily) may be aggregated to monthly for portfolio rebalance use.</p></li>
+<li><p>高频因子（日报）可在组合调仓前聚合到月频使用。</p></li>
+</ul>
+<p>Current data requirements reference / 当前需求对应频率示例:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">News</span> <span class="pre">Sentiment</span></code>: daily</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Dividend</span> <span class="pre">Yield</span></code>, <code class="docutils literal notranslate"><span class="pre">P/B</span></code>: monthly</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Debt/Equity</span></code>: quarterly</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EBITDA</span> <span class="pre">Margin</span></code>: quarterly/annual</p></li>
+</ul>
+</section>
+<section id="integrator-flow">
+<h2>5) Integrator flow / 总装流程（已接入）<a class="headerlink" href="#integrator-flow" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">get_company_universe</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">extract_source_a</span></code> + <code class="docutils literal notranslate"><span class="pre">extract_source_b</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">normalize_records</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">run_quality_checks</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">load_curated</span></code></p></li>
+<li><p>run log</p></li>
+</ul>
+</section>
+<section id="who-uses-docker-how-to-use-it-docker">
+<h2>5.1) Who uses Docker &amp; how to use it / 哪些角色需要 Docker &amp; 如何使用<a class="headerlink" href="#who-uses-docker-how-to-use-it-docker" title="Link to this heading">¶</a></h2>
+<p><strong>Roles that MUST use Docker (run/validate infra):</strong></p>
+<ul class="simple">
+<li><p><strong>Role 3 (Architecture &amp; Storage):</strong> owns PostgreSQL/MinIO storage design; may extend <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> if new infrastructure is added.</p></li>
+<li><p><strong>Role 4 (Integrator):</strong> ensures everyone can start the provided infrastructure via Docker and that the pipeline can connect using the compose-defined ports/credentials.</p></li>
+</ul>
+<p><strong>Roles that SHOULD use Docker (usually no compose changes):</strong></p>
+<ul class="simple">
+<li><p><strong>Role 5 (DB Connectivity):</strong> connects to PostgreSQL (and optionally MongoDB) started by Docker.</p></li>
+<li><p><strong>Role 6/7 (Extractors):</strong> may need MinIO (and/or MongoDB) running locally to persist raw payloads.</p></li>
+<li><p><strong>Role 8 (Transform/Quality/Tests):</strong> runs integration/E2E tests against PostgreSQL/MinIO.</p></li>
+</ul>
+<p><strong>Roles that typically do NOT need Docker:</strong></p>
+<ul class="simple">
+<li><p><strong>Role 1/2 (PM/Requirements/Docs):</strong> documentation focus; only run Docker if you want to reproduce screenshots or validate the pipeline locally.</p></li>
+<li><p>If your module interacts with any of the above (DB, MinIO), you <strong>must</strong> start the containers via <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span></code> before running your code.</p></li>
+</ul>
+<p><strong>How to use Docker (hard rules):</strong></p>
+<ol class="arabic">
+<li><p>Run Docker commands <strong>only from repo root</strong> <code class="docutils literal notranslate"><span class="pre">ift_coursework_2025/</span></code> (where <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> lives).</p></li>
+<li><p>Start required infra:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>ift_coursework_2025
+docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+<span class="c1"># or start only the needed services (names depend on compose)</span>
+<span class="c1"># docker compose up -d postgres_db mongo_db miniocw</span>
+</pre></div>
+</div>
+</li>
+<li><p>Check services:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>compose<span class="w"> </span>ps
+docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span><span class="m">50</span><span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+</pre></div>
+</div>
+</li>
+<li><p>Run your app/tests in <code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/</span></code> as usual.</p></li>
+<li><p>Stop services when done:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>compose<span class="w"> </span>down
+</pre></div>
+</div>
+</li>
+</ol>
+<ul class="simple">
+<li><p><strong>Tips</strong></p>
+<ul>
+<li><p>Do <strong>not</strong> run <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span></code> inside <code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/</span></code>.</p></li>
+<li><p>If you see connection errors, check whether the containers are running with <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">ps</span></code>.</p></li>
+<li><p>If you change <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code>, others must pull and restart their containers.</p></li>
+</ul>
+</li>
+</ul>
+<section id="id1">
+<h3>中文<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
+<p><strong>必须使用 Docker 的角色（需要启动/验证基础设施）：</strong></p>
+<ul class="simple">
+<li><p>**3号（架构与存储）：**负责 PostgreSQL/MinIO 存储架构设计；如果需要新增基础设施，可能需要扩展 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code>。</p></li>
+<li><p>**4号（总装/集成）：**保证大家能用 Docker 启动老师提供的基础设施，并确保流水线连接信息与 compose 中端口/账号一致。</p></li>
+</ul>
+<p><strong>建议使用 Docker 的角色（一般不改 compose，只需要连上环境）：</strong></p>
+<ul class="simple">
+<li><p>**5号（DB 连接）：**需要连接 Docker 启动的 PostgreSQL（以及可选的 MongoDB）。</p></li>
+<li><p>**6/7号（抓取）：**可能需要本地启动 MinIO（和/或 MongoDB）来落地原始 payload。</p></li>
+<li><p>**8号（清洗/质量/测试）：**需要对 PostgreSQL/MinIO 做集成/端到端测试。</p></li>
+</ul>
+<p><strong>通常不需要 Docker 的角色：</strong></p>
+<ul class="simple">
+<li><p>**1/2号（产品/需求/文档）：**以文档为主；只有在需要复现截图或本地验证 pipeline 时才需要跑 Docker。</p></li>
+<li><p>如果你的模块要访问上述任何服务（DB, MinIO），<strong>必须</strong>先用 <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span></code> 启动容器再运行代码。</p></li>
+</ul>
+<p><strong>如何使用 Docker（硬规则）：</strong></p>
+<ol class="arabic">
+<li><p>Docker 命令只能在<strong>仓库根目录</strong> <code class="docutils literal notranslate"><span class="pre">ift_coursework_2025/</span></code>（有 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> 那层）运行。</p></li>
+<li><p>启动所需基础设施：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>ift_coursework_2025
+docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+<span class="c1"># 或者只启动需要的服务（服务名以 compose 为准）</span>
+<span class="c1"># docker compose up -d postgres_db mongo_db miniocw</span>
+</pre></div>
+</div>
+</li>
+<li><p>查看服务状态：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>compose<span class="w"> </span>ps
+docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span><span class="m">50</span><span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+</pre></div>
+</div>
+</li>
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/</span></code> 目录正常开发/测试。</p></li>
+<li><p>结束后关闭：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>compose<span class="w"> </span>down
+</pre></div>
+</div>
+</li>
+</ol>
+<ul class="simple">
+<li><p><strong>常见问题</strong></p>
+<ul>
+<li><p><strong>不要</strong>在 <code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/</span></code> 下运行 <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span></code>。</p></li>
+<li><p>如果出现连接错误，先用 <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">ps</span></code> 检查容器是否在运行。</p></li>
+<li><p>如果 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> 有改动，其他人需要同步并重启容器。</p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="docker-requirements-what-we-need-to-build-docker">
+<h2>5.2) Docker requirements &amp; what we need to build / Docker 要求与是否需要自己构建<a class="headerlink" href="#docker-requirements-what-we-need-to-build-docker" title="Link to this heading">¶</a></h2>
+<section id="english">
+<h3>English<a class="headerlink" href="#english" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Do we need to write our own Dockerfile / rebuild everything?</strong></p>
+<ul>
+<li><p><strong>No.</strong> For CW1, we primarily <strong>use the provided <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> in the repo root</strong> to start the infrastructure (PostgreSQL / MongoDB / MinIO, etc.).</p></li>
+<li><p>Most services in the compose file use <code class="docutils literal notranslate"><span class="pre">image:</span></code> and will be pulled automatically.</p></li>
+<li><p>If the compose file contains a special seeding service with <code class="docutils literal notranslate"><span class="pre">build:</span></code> (e.g., a database seeder), <strong>Docker will build it automatically when you run <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span> <span class="pre">up</span> <span class="pre">--build</span></code></strong>. We do <strong>not</strong> need to redesign containers.</p></li>
+</ul>
+</li>
+<li><p><strong>Hard rule</strong>: run Docker only from the <strong>repo root</strong> (<code class="docutils literal notranslate"><span class="pre">ift_coursework_2025/</span></code>) where <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> lives.</p></li>
+<li><p><strong>When do we change <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code>?</strong></p>
+<ul>
+<li><p>Only if we <strong>explicitly add new infrastructure components</strong> (e.g., Airflow/Kafka). If we add anything, it must be <strong>containerized and integrated via <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code></strong>.</p></li>
+</ul>
+</li>
+<li><p><strong>Connection details</strong> (host/port/user/password) must follow what is defined in <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code>.</p>
+<ul>
+<li><p>We will consolidate these into our project config later (Role 4 will publish the final <code class="docutils literal notranslate"><span class="pre">.env</span></code>/config convention).</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="id2">
+<h3>中文<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>我们需要自己写 Dockerfile / 重建整个环境吗？</strong></p>
+<ul>
+<li><p><strong>不需要。</strong> CW1 主要是<strong>使用老师提供的仓库根目录 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code></strong> 启动基础设施（PostgreSQL / MongoDB / MinIO 等）。</p></li>
+<li><p>compose 里大多数服务是 <code class="docutils literal notranslate"><span class="pre">image:</span></code>，会自动拉取镜像。</p></li>
+<li><p>如果 compose 里有带 <code class="docutils literal notranslate"><span class="pre">build:</span></code> 的特殊服务（例如初始化/灌库 seeder），执行 <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span> <span class="pre">up</span> <span class="pre">--build</span></code> 时 <strong>Docker 会自动构建</strong>。我们不需要重新设计容器。</p></li>
+</ul>
+</li>
+<li><p><strong>硬规则</strong>：只能在<strong>仓库根目录</strong>（<code class="docutils literal notranslate"><span class="pre">ift_coursework_2025/</span></code>，有 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> 那层）运行 Docker。</p></li>
+<li><p><strong>什么时候需要改 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code>？</strong></p>
+<ul>
+<li><p>仅当我们<strong>明确新增基础设施组件</strong>（例如 Airflow/Kafka）。新增任何组件都必须<strong>Docker 容器化</strong>并通过 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> 集成。</p></li>
+</ul>
+</li>
+<li><p><strong>连接信息</strong>（host/port/user/password）必须以 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> 为准。</p></li>
+</ul>
+</section>
+</section>
+<section id="runtime-config-env-connection-conventions-env">
+<h2>5.3) Runtime config (.env) &amp; connection conventions / 运行配置（.env）与连接规范<a class="headerlink" href="#runtime-config-env-connection-conventions-env" title="Link to this heading">¶</a></h2>
+<section id="id3">
+<h3>English<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<p><strong>Where is the config template?</strong></p>
+<ul>
+<li><p>Template file: <code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/.env.example</span></code></p></li>
+<li><p>Create your local <code class="docutils literal notranslate"><span class="pre">.env</span></code> from the template (do NOT commit <code class="docutils literal notranslate"><span class="pre">.env</span></code>):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>team_Pearson/coursework_one
+cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+</pre></div>
+</div>
+</li>
+</ul>
+<p><strong>Source of truth</strong></p>
+<ul class="simple">
+<li><p>All host/port/user/password values must match the repo-root <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.env.example</span></code> mirrors the current compose defaults for consistent local development.</p></li>
+</ul>
+<p><strong>Environment variables (convention)</strong></p>
+<ul class="simple">
+<li><p>PostgreSQL:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_HOST=localhost</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_PORT=5439</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_DB=postgres</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_USER=postgres</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_PASSWORD=postgres</span></code></p></li>
+</ul>
+</li>
+<li><p>MongoDB:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">MONGO_HOST=localhost</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MONGO_PORT=27019</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MONGO_DB=admin</span></code></p></li>
+</ul>
+</li>
+<li><p>MinIO:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">MINIO_ENDPOINT=http://localhost:9000</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MINIO_ACCESS_KEY=ift_bigdata</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MINIO_SECRET_KEY=minio_password</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MINIO_BUCKET=csreport</span></code></p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Bucket / storage naming</strong></p>
+<ul class="simple">
+<li><p>Current MinIO bucket: <code class="docutils literal notranslate"><span class="pre">csreport</span></code>.</p></li>
+<li><p>Do not invent new bucket names or folder conventions without Role 3 + Role 4 alignment.</p></li>
+<li><p>Raw/curated pathing will be finalized after Role 3 confirms the storage design.</p></li>
+</ul>
+</section>
+<section id="id4">
+<h3>中文<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h3>
+<p><strong>配置模板在哪里？</strong></p>
+<ul>
+<li><p>模板文件：<code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/.env.example</span></code></p></li>
+<li><p>从模板生成你的本地 <code class="docutils literal notranslate"><span class="pre">.env</span></code>（不要提交 <code class="docutils literal notranslate"><span class="pre">.env</span></code>）：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>team_Pearson/coursework_one
+cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+</pre></div>
+</div>
+</li>
+</ul>
+<p><strong>以谁为准？</strong></p>
+<ul class="simple">
+<li><p>所有 host/port/user/password 必须以仓库根目录的 <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code> 为准。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.env.example</span></code> 只是把当前 compose 的默认值镜像出来，便于大家统一本地开发环境。</p></li>
+</ul>
+<p><strong>环境变量命名（统一约定）</strong></p>
+<ul class="simple">
+<li><p>PostgreSQL：</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_HOST=localhost</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_PORT=5439</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_DB=postgres</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_USER=postgres</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">POSTGRES_PASSWORD=postgres</span></code></p></li>
+</ul>
+</li>
+<li><p>MongoDB：</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">MONGO_HOST=localhost</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MONGO_PORT=27019</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MONGO_DB=admin</span></code></p></li>
+</ul>
+</li>
+<li><p>MinIO：</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">MINIO_ENDPOINT=http://localhost:9000</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MINIO_ACCESS_KEY=ift_bigdata</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MINIO_SECRET_KEY=minio_password</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MINIO_BUCKET=csreport</span></code></p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Bucket / 存储命名约定</strong></p>
+<ul class="simple">
+<li><p>当前 MinIO 统一 bucket：<code class="docutils literal notranslate"><span class="pre">csreport</span></code>。</p></li>
+<li><p>没有 3号 + 4号一致前，不要私自新增 bucket 名称或自定义路径规范。</p></li>
+<li><p>raw/curated 的路径规则会在 3号确认存储设计后最终定稿。</p></li>
+</ul>
+</section>
+</section>
+<section id="local-validation-before-pr-pr">
+<h2>6) Local validation before PR / PR 前本地验收<a class="headerlink" href="#local-validation-before-pr-pr" title="Link to this heading">¶</a></h2>
+<p>Hard rule from coursework instructions / 老师要求的硬规则:</p>
+<ul class="simple">
+<li><p>Run <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span> <span class="pre">...</span></code> only in repo root <code class="docutils literal notranslate"><span class="pre">ift_coursework_2025/</span></code>.</p></li>
+<li><p>Never run <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">compose</span></code> inside <code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/</span></code>.</p></li>
+</ul>
+<p>Start infra from repo root first:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>ift_coursework_2025
+docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>postgres_db<span class="w"> </span>mongo_db<span class="w"> </span>miniocw
+</pre></div>
+</div>
+<p>Then run app/tests in <code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>poetry<span class="w"> </span>install
+poetry<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>Main.py<span class="w"> </span>--run-date<span class="w"> </span><span class="m">2026</span>-02-14<span class="w"> </span>--frequency<span class="w"> </span>daily<span class="w"> </span>--dry-run
+poetry<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>Main.py<span class="w"> </span>--run-date<span class="w"> </span><span class="m">2026</span>-02-01<span class="w"> </span>--frequency<span class="w"> </span>monthly<span class="w"> </span>--dry-run
+poetry<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>Main.py<span class="w"> </span>--run-date<span class="w"> </span><span class="m">2026</span>-12-31<span class="w"> </span>--frequency<span class="w"> </span>annual<span class="w"> </span>--dry-run
+poetry<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests<span class="w"> </span>-q
+</pre></div>
+</div>
+<p>One-command-sequence summary / 一条流程总结:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>ift_coursework_2025
+docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>postgres_db<span class="w"> </span>mongo_db<span class="w"> </span>miniocw
+<span class="nb">cd</span><span class="w"> </span>team_Pearson/coursework_one
+poetry<span class="w"> </span>install
+poetry<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>Main.py<span class="w"> </span>--run-date<span class="w"> </span><span class="m">2026</span>-02-14<span class="w"> </span>--frequency<span class="w"> </span>daily<span class="w"> </span>--dry-run
+poetry<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests<span class="w"> </span>-q
+</pre></div>
+</div>
+<p>Pass criteria / 通过标准:</p>
+<ul class="simple">
+<li><p>Exit code is <code class="docutils literal notranslate"><span class="pre">0</span></code></p></li>
+<li><p>Output contains <code class="docutils literal notranslate"><span class="pre">run_log_written_to</span></code></p></li>
+<li><p>Smoke test passes</p></li>
+</ul>
+</section>
+<section id="role-8-testing-scope-8">
+<h2>6.1) Role 8 Testing Scope / 8号测试职责范围<a class="headerlink" href="#role-8-testing-scope-8" title="Link to this heading">¶</a></h2>
+<p>Role 8 is the primary owner of data validation tests and should ensure all testing layers are covered.
+8号是数据验收测试主责，需要确保测试分层完整（单元/集成/端到端）。</p>
+<p>Required scope / 必做范围:</p>
+<ul class="simple">
+<li><p>Unit tests for output validation logic:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_normalize_unit.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_quality_unit.py</span></code></p></li>
+</ul>
+</li>
+<li><p>Integration coverage for component interactions:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_pipeline_integration.py</span></code></p></li>
+</ul>
+</li>
+<li><p>E2E/smoke verification of end-to-end pipeline:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_e2e.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_smoke.py</span></code></p></li>
+</ul>
+</li>
+</ul>
+<p>Target checks / 验收要求:</p>
+<ul class="simple">
+<li><p>Use pytest through poetry:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">poetry</span> <span class="pre">run</span> <span class="pre">pytest</span> <span class="pre">tests</span> <span class="pre">-q</span></code></p></li>
+</ul>
+</li>
+<li><p>Keep coverage above red line:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">poetry</span> <span class="pre">run</span> <span class="pre">pytest</span> <span class="pre">tests</span> <span class="pre">-q</span> <span class="pre">--cov=modules</span> <span class="pre">--cov=Main</span> <span class="pre">--cov-fail-under=80</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="commit-scope">
+<h2>7) Commit scope / 提交边界<a class="headerlink" href="#commit-scope" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Keep all changes inside <code class="docutils literal notranslate"><span class="pre">team_Pearson/coursework_one/</span></code> plus required team-level files.</p></li>
+<li><p>Do not commit unrelated folders/artifacts (DB folders, caches, temp files, etc.).</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">IFT Coursework 2025_team_Pearson</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">📄 usage.md</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">📄 architecture.md</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">modules</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2026, Team Pearson.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.4</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/ROLE4_INTEGRATION_NOTICE.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
