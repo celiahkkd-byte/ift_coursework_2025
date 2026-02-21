@@ -1,8 +1,18 @@
 API Reference
 =============
 
-.. automodule:: modules.db.universe
-   :members:
+DB Connectivity
+---------------
 
-.. automodule:: modules.db.db_connection
+.. automodule:: db.db_connection
    :members:
+   :undoc-members:
+   :show-inheritance:
+
+Universe Retrieval
+------------------
+
+.. automodule:: db.universe
+   :members:
+   :undoc-members:
+   :show-inheritance:
