@@ -90,10 +90,10 @@ Set up the fundamental project architecture using Poetry. Enforce the strict fol
 
 **Acceptance Criteria (Definition of Done):**
 - [ ] **Toolchain Configuration:** Initialize with `poetry init`. Configure `flake8`, `black`, `isort`, and `bandit` (or `safety`) for security scans.
-- [ ] **Strict Folder Structure:** All developments MUST be placed under `team_<insert your team id>/coursework_one/` containing EXACTLY the following subfolders: `config/`, `modules/` (with `db/`, `input/`, `output/` sub-directories), `static/`, and `test/`.
+- [ ] **Strict Folder Structure:** All developments MUST be placed under `team_<insert your team id>/coursework_one/` containing EXACTLY the following subfolders: `config/`, `modules/` (with `db/`, `input/`, `output/` sub-directories), `static/`, and `test/`.You MUST also initialize a README.md and a CHANGELOG.md at the root of the team folder exactly as shown in the coursework specifications.
 - [ ] **Database Isolation:** Do NOT copy databases into other folders. Ensure any changes outside the group folder (e.g., `000.Database`) are un-staged before committing to Git.
 - [ ] **CLI & Scheduling:** `Main.py` must support `--run-date` and `--frequency`. Implement or mock a scheduling library (like `APScheduler` or `Airflow`) to satisfy the "Application Flexibility" requirement.
-
+- [ ] **Security Vulnerability Fixes:** Configure bandit (or safety) for security scans. You must implement a process to not just scan, but promptly address and fix any identified vulnerabilities before code is merged.
 ---
 
 ### Issue #5: [DB Connectivity] Implement Universe Extraction Layer & Sphinx Docs
@@ -123,7 +123,7 @@ Develop a secure and reusable database connection module that reads the dynamic 
    * API Reference generated automatically via autodoc.
    * Architecture Overview describing the data flow and storage design.
  - Ensure the HTML documentation builds successfully using `make html`.
-
+- [ ] **Auto-Documentation:** Ensure sphinx.ext.autodoc is correctly configured in conf.py to automatically pull docstrings from all modules (Input, Transform, DB) into the final HTML API Reference.
 ---
 
 ### Issue #6: [Extraction] Ingest Structured Pricing and Fundamental Data to MinIO
@@ -177,46 +177,56 @@ Develop the data ingestion pipeline to pull historical structured pricing and de
   * Ensure the pipeline can run continuously without crashing under API rate limits.
 ---
 
-### Issue #7: [Extraction] Ingest Unstructured News & Calculate Sentiment
+### Issue #7: [Extraction & Aggregation] Ingest Unstructured News & Compute Rolling Sentiment
 **Assignee:** Extractor B (Role 7 / Developer)
-**Labels:** `data-ingestion`, `alternative-data`
+**Labels:** `data-ingestion`, `alternative-data`, `pandas-aggregation`
 
 **Description:**
-Enhance the dataset by ingesting unstructured alternative data (news headlines) to compute the Sentiment risk factor.
+Enhance the dataset by ingesting unstructured alternative data (news headlines) from external APIs to compute the Sentiment risk factor. Crucially, this module must handle both the immutable storage of raw JSONs in the Data Lake AND the in-memory time-series aggregation to deliver a clean factor table to downstream ETL.
 
 **Inputs:**
 - Company list from `get_company_universe()`.
 
 **Outputs:**
-- `modules/input/extract_source_b.py`.
+- `modules/input/extract_sentiment.py` (**Must `return` a clean Pandas DataFrame for Role 8**).
 
 **Acceptance Criteria (Definition of Done):**
-- [ ] **Extraction Logic:** Call an external news API (e.g., Alpha Vantage News Sentiment) to scrape raw news text related to the target companies.
-- [ ] **Raw Storage:** Persistently store the raw JSON news payloads into MinIO.
-- [ ] **Sentiment Computation:** Implement NLP scoring logic to calculate a normalized daily `sentiment_score` (-1.0 to 1.0) over a rolling 30-day window.
-- [ ] **Fallback Logic:** If no news exists for a 30-day window, the function must handle the empty state gracefully and return `0.0`.
+
+- [ ] **Extraction Logic & Raw Storage:** Call an external news API (e.g., Alpha Vantage News Sentiment) to scrape raw news. Persistently store the raw JSON payloads into MinIO strictly adhering to the `raw/{source}/...` pathing. **DO NOT filter or drop any data here.**
+- [ ] **Pandas Time-Series Aggregation (CRITICAL):** After fetching the data, use Pandas to compress the high-frequency data in memory:
+  1. *Daily Compression:* Group by company and date to get a daily average.
+  2. *Rolling Window:* Apply `.rolling(window=30, min_periods=1).mean()` to compute the 30-day moving average of the sentiment score (-1.0 to 1.0).
+- [ ] **Module Handoff (Return Format):** The module must NOT attempt to write to PostgreSQL. It must simply `return` a clean DataFrame containing exactly these columns: `[symbol, observation_date, sentiment_score_30d, article_count_30d]` to hand off to Role 8.
+- [ ] **Fallback Logic:** If no news exists for a 30-day window, handle the empty state gracefully and output a score of `0.0`.
 
 ---
 
-###  Issue #8: [ETL & QA] Normalize Data, Enforce Quality & Achieve 80% pytest Coverage
+### Issue #8: [ETL & QA] Merge Factors, Enforce Quality Rules & Achieve 80% pytest Coverage
 **Assignee:** Transform, Quality & Tests Anchor (Role 8 / Developer)
-**Labels:** `testing`, `data-processing`
+**Labels:** `testing`, `data-processing`, `quality-assurance`
 
 **Description:**
-Transform the raw MinIO data and internal database fields into the curated PostgreSQL table. Enforce strict data quality standards and ensure the entire codebase meets the academic 80% test coverage requirement.
+Act as the central integration point. Call the extraction modules (Roles 6 & 7) to retrieve pre-aggregated data, perform cross-frequency merging, enforce strict financial data quality rules, and load the final hybrid factors into the curated PostgreSQL table.
 
 **Inputs:**
-- Raw data stored in MinIO.
-- Internal fundamentals from PostgreSQL.
+- Raw pricing & fundamental data from MinIO (via Role 6's module).
+- Pre-aggregated Sentiment DataFrame (returned directly from Role 7's module).
+- Investable universe mapping from PostgreSQL `company_static`.
 
 **Outputs:**
-- `modules/transform/normalize.py`.
-- `modules/quality/checks.py`.
+- `modules/transform/normalize.py`
+- `modules/quality/checks.py`
 - Comprehensive `pytest` test suite.
 
 **Acceptance Criteria (Definition of Done):**
-- [ ] **Normalization Logic:** Implement the computation for hybrid factors (EBITDA Margin, P/B Ratio, Debt/Equity) merging internal SQL data with external API data.
-- [ ] **Quality Rules Engine:** Programmatically enforce the rules defined in Issue #2 (e.g., look-ahead bias prevention, maximum 12-month staleness drops).
-- [ ] **Coverage Red Line:** Execute tests using `poetry run pytest ./tests/` and achieve a minimum of **80% code coverage**.
-- [ ] **E2E Integration Test:** Automate the execution of the Architect's two required queries to assert that row counts, time ranges, and unique keys are valid and non-duplicated.
-- [ ] **Git Submission Compliance:** Ensure the final code is pushed to branch `feature/coursework_one_<YOUR_TEAM_ID>` before creating the PR for `@uceslc0`.
+
+- [ ] **Cross-Frequency Normalization Logic:** Call the functions written by Role 6 and Role 7. You will receive DataFrames of varying frequencies (Daily Sentiment, Monthly Price, Quarterly/Annual Fundamentals). You must successfully merge these using Pandas `merge_asof` or forward-filling mechanisms to align them perfectly on the `observation_date`.
+
+- [ ] **Quality Rules Engine:** Programmatically enforce the strict business rules:
+  * **Look-ahead Bias Prevention:** Enforce the strictly backward-looking `[-3 to 0 days]` lag for all Price data.
+  * **Staleness Drops:** Enforce the max 12-month forward-fill limit for fundamentals (and the 9-month limit for Debt/Equity).
+  * **Distress Exclusions:** Explicitly `DROP` rows with Negative Revenue or Negative Equity.
+
+- [ ] **Coverage Red Line:** Execute tests using `poetry run pytest ./tests/` and achieve a minimum of 80% code coverage. You must mock the upstream DataFrames to test edge cases (e.g., forcing negative equity to ensure the row drops).
+
+- [ ] **Git Submission Compliance:** Ensure the final code is pushed to branch `feature/coursework_one_<YOUR_TEAM_ID>` before creating the PR for @uceslc0.rsework_one_<YOUR_TEAM_ID>` before creating the PR for `@uceslc0`.
