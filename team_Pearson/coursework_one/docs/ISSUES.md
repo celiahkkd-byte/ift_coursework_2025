@@ -126,25 +126,55 @@ Develop a secure and reusable database connection module that reads the dynamic 
 
 ---
 
-### Issue #6: [Extraction] Ingest Structured Pricing and Financial Data to MinIO
+### Issue #6: [Extraction] Ingest Structured Pricing and Fundamental Data to MinIO
 **Assignee:** Extractor A (Role 6 / Developer)
-**Labels:** `data-ingestion`, `api`
+**Labels:** `data-ingestion`, `api`, `alpha-vantage`
 
 **Description:**
-Develop the data ingestion pipeline to pull historical structured pricing and financial data (Dividend, Debt, etc.) from external APIs and store it securely in the Data Lake.
+Develop the data ingestion pipeline to pull historical structured pricing and deep fundamental financial data (Income Statement, Balance Sheet, Dividends) from external APIs (e.g., Alpha Vantage) and store the raw payloads securely in the Data Lake (MinIO).
 
 **Inputs:**
 - Company list from `get_company_universe()`.
 
 **Outputs:**
-- `modules/input/extract_source_a.py`.
+- `modules/input/extract_alphavantage.py` (or equivalent source-specific extractor module).
 
 **Acceptance Criteria (Definition of Done):**
-- [ ] **Extraction Logic:** Successfully call an external API (e.g., `yfinance`) to extract Adjusted Close Price, Dividends, and Total Debt.
-- [ ] **Historical Depth:** Must successfully retrieve past data (at least 5 years) for the given universe.
-- [ ] **Raw Storage:** Persistently serialize the raw API responses into MinIO, strictly adhering to the `raw/{source}/...` pathing specifications.
-- [ ] **Error Handling:** Implement robust retry logic and rate-limit avoidance (e.g., `time.sleep()`) to prevent HTTP 429 bans.
 
+- [ ]  **Extraction Logic (CRITICAL):**
+  Successfully call the external API (e.g., Alpha Vantage) and extract the following required fields:
+  * **Pricing & Dividends (Daily/Monthly):**
+    * Adjusted Close Price
+    * Dividend Per Share (DPS)
+  * **Income Statement (Quarterly & Annual):**
+    * EBITDA
+    * Revenue
+    * Report `end_date` (mandatory)
+  * **Balance Sheet (Quarterly & Annual):**
+    * Book Value / Total Equity
+    * Outstanding Shares
+    * Total Debt
+  * **Fallback Requirement (Mandatory):**
+    * Short-term Debt
+    * Long-term Debt
+    *(These must be extracted even if Total Debt exists, so downstream ETL can compute it when missing).*
+
+- [ ] **Historical Depth:**
+  * Must successfully retrieve at least **5 years** of historical data across all required endpoints for the full company universe.
+
+- [ ]  **Raw Storage (Immutable):**
+  * Persistently serialize and store the entire raw API response (JSON/CSV) into MinIO.
+  * Must strictly follow the `raw/{source}/...` pathing convention.
+  * **Do NOT drop missing values.**
+  * **Do NOT filter negative values.**
+  * Raw data must remain fully intact for downstream QA.
+
+- [ ]  **Strict Error Handling & Rate Limits:**
+  * Implement robust retry logic.
+  * Use exponential backoff.
+  * Implement `time.sleep()` safeguards.
+  * Prevent HTTP 429 bans.
+  * Ensure the pipeline can run continuously without crashing under API rate limits.
 ---
 
 ### Issue #7: [Extraction] Ingest Unstructured News & Calculate Sentiment
