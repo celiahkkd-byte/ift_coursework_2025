@@ -11,7 +11,7 @@
 |------|--------------|
 | Metric Name | Dividend Yield |
 | Raw Fields | Dividend Per Share (DPS), Adjusted Close Price |
-| Origin Source (Input) | External API (`yfinance`) |
+| Origin Source (Input) | External API (`Alpha Vantage`) |
 | Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
 | Frequency | Monthly (computed using latest available dividend at month-end) |
 | History | ≥ 5 years |
@@ -30,8 +30,8 @@
 | Field | Specification |
 |------|--------------|
 | Metric Name | EBITDA Margin |
-| Raw Fields | `enterprise_ebitda`, `enterprise_revenue`, `end_date` |
-| Origin Source (Input) | Internal PostgreSQL (`systematic_equity` static tables) |
+| Raw Fields | `ebitda`, `revenue`, `end_date` |
+| Origin Source (Input) | Alpha Vantage |
 | Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
 | Frequency | Quarterly/Annual (aligned with internal table updates) |
 | History | ≥ 5 years |
@@ -50,8 +50,8 @@
 | Field | Specification |
 |------|--------------|
 | Metric Name | Debt/Equity |
-| Raw Fields | Total Debt (Short-term + Long-term), `book_value` |
-| Origin Source (Input) | **Mixed:** External API (`yfinance` for Debt) + Internal PostgreSQL (`book_value`) |
+| Raw Fields | Total Debt (Short-term + Long-term), `Equity` |
+| Origin Source (Input) | Alpha Vantage |
 | Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
 | Frequency | Quarterly |
 | History | ≥ 5 years |
@@ -71,7 +71,7 @@
 |------|--------------|
 | Metric Name | P/B Ratio |
 | Raw Fields | Adjusted Close Price, `outstanding_shares`, `book_value` |
-| Origin Source (Input) | **Mixed:** External API (`Price`) + Internal PostgreSQL (`outstanding_shares`, `book_value`) |
+| Origin Source (Input) | Alpha Vantage (`Price`), Book Value |
 | Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
 | Frequency | Monthly |
 | History | ≥ 5 years |
@@ -127,3 +127,4 @@ The pipeline and infrastructure must pass the following verifiable automated cri
 
 ### 4. Quality Auditability
 - **Lineage Tracing:** Every row in the curated PostgreSQL table must include a `run_id` or `updated_at` timestamp linking it back to the specific execution batch that fetched the raw data from MinIO.
+
