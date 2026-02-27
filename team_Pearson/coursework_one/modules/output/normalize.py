@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+"""Normalization helpers for curated pipeline records."""
+
+import math
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +22,8 @@ def _to_iso_date(x: Any) -> Optional[str]:
         s = x.strip()
         if not s:
             return None
+        if s.lower() in {"nat", "nan", "none", "null"}:
+            return None
         # Best-effort: accept 'YYYY-MM-DD...' (with time)
         return s[:10]
     # Unknown type -> keep None so quality can flag missing/invalid
@@ -33,12 +38,8 @@ def _to_float_or_none(x: Any) -> Optional[float]:
     if x is None:
         return None
     if isinstance(x, (int, float)):
-        # handle NaN
-        try:
-            if x != x:  # NaN check
-                return None
-        except Exception:
-            pass
+        if not math.isfinite(float(x)):
+            return None
         return float(x)
 
     if isinstance(x, str):
@@ -59,30 +60,25 @@ def _to_float_or_none(x: Any) -> Optional[float]:
 
 
 def normalize_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Normalize raw records into a shared long-format schema.
+    """Normalize records into the shared output schema.
 
-    Output schema (kept stable for downstream load):
-      - symbol
-      - observation_date (YYYY-MM-DD string)
-      - factor_name
-      - factor_value (float or None)
-      - source
-      - metric_frequency
-      - source_report_date (YYYY-MM-DD string or None)
-      - run_id (optional passthrough)
+    Parameters
+    ----------
+    records:
+        Raw records from extractors. Field aliases are tolerated (for example
+        ``value`` or ``factor_value``).
 
-    Input tolerance:
-      - symbol may come from 'symbol' or 'company_id'
-      - observation_date may come from 'observation_date' or 'date' or 'as_of'
-      - factor_name may come from 'factor_name' or 'metric'
-      - factor_value may come from 'factor_value' or 'value'
-      - metric_frequency may come from 'metric_frequency' or 'frequency'
+    Returns
+    -------
+    list[dict[str, Any]]
+        Records with standardized keys and types:
+        ``symbol``, ``observation_date``, ``factor_name``, ``factor_value``,
+        ``source``, ``metric_frequency``, ``source_report_date``, ``run_id``.
     """
     normalized: List[Dict[str, Any]] = []
 
     for rec in records:
-        symbol = rec.get("symbol") or rec.get("company_id")
+        symbol = rec.get("symbol")
 
         obs_date_raw = rec.get("observation_date") or rec.get("date") or rec.get("as_of")
         observation_date = _to_iso_date(obs_date_raw)
@@ -99,6 +95,10 @@ def normalize_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         metric_frequency = str(freq).strip().lower() if freq is not None else "unknown"
 
         source_report_date = _to_iso_date(rec.get("source_report_date"))
+
+        # Invalid observation_date rows are dropped at contract boundary.
+        if observation_date is None:
+            continue
 
         normalized.append(
             {

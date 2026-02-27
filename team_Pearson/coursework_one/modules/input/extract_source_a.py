@@ -1,495 +1,526 @@
-"""
-extract_source_a.py
-====================
-Extractor A — Main data source access and raw data dumping to MinIO.
+from __future__ import annotations
 
-This module is responsible for:
-1. Connecting to Alpha Vantage (financial data API)
-2. Downloading 5+ years of daily stock price data per company
-3. Saving raw data to MinIO at the path:
-   raw/source_a/{TICKER}/as_of={DATE}/run_date={DATE}/data.json
+"""Structured extractor (Source A).
 
-How to run directly:
-    poetry run python modules/input/extract_source_a.py
-    poetry run python modules/input/extract_source_a.py --run-date 2024-01-01
-    poetry run python modules/input/extract_source_a.py --years-back 7
-
-How to import into another module:
-    from modules.input.extract_source_a import extract_source_a
-    results = extract_source_a(["AAPL", "MSFT"], "2024-02-13", 5, "daily")
+This module fetches market/fundamental data for symbols, persists raw payloads
+to MinIO, and returns records aligned to the pipeline's curated schema.
 """
 
+import json
 import logging
+import os
+import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 import pandas as pd
-import requests
 import yaml
-from minio import Minio
 
-# ---------------------------------------------------------------------------
-# LOGGING SETUP
-# Prints timestamped messages to the terminal so you can see what's happening.
-# Example output: 2024-11-15 10:23:01 [INFO] Fetching data for AAPL...
-# ---------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# CONFIG LOADER
-# ---------------------------------------------------------------------------
+def _json_default(obj: Any) -> Any:
+    if hasattr(obj, "isoformat"):
+        return obj.isoformat()
+    return str(obj)
 
-def load_config(config_path: str = "config/conf.yaml") -> dict:
+
+def load_config(config_path: str = "config/conf.yaml") -> Dict[str, Any]:
+    """Load YAML configuration from disk.
+
+    Parameters
+    ----------
+    config_path:
+        Path to YAML config file.
+
+    Returns
+    -------
+    dict[str, Any]
+        Parsed config dictionary. Returns an empty dict when file is missing.
     """
-    Reads the YAML configuration file and returns it as a dictionary.
-
-    All settings (API keys, company list, MinIO credentials) live in
-    conf.yaml so we never hardcode secrets directly in the code.
-
-    :param config_path: Relative path to the config file.
-    :return: Dictionary of all configuration values.
-
-    Example:
-        config = load_config()
-        api_key = config["api"]["alpha_vantage_key"]
-    """
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-    logger.info(f"Config loaded from: {config_path}")
-    return config
+    if not os.path.exists(config_path):
+        return {}
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
 
-# ---------------------------------------------------------------------------
-# ALPHA VANTAGE — DATA FETCHER
-# ---------------------------------------------------------------------------
+def _download_price_history(symbol: str, years_back: int, max_retries: int = 3):
+    """Download price history from yfinance (fallback provider)."""
+    import yfinance as yf
 
-def fetch_daily_data(ticker: str, api_key: str) -> pd.DataFrame:
-    """
-    Downloads the complete daily price history for one company from Alpha Vantage.
+    period = f"{max(1, int(years_back))}y"
+    last_error: Exception | None = None
 
-    Uses the TIME_SERIES_DAILY endpoint with outputsize=full, which returns
-    20+ years of open, high, low, close, and volume data.
-
-    :param ticker: Stock ticker symbol, e.g. "AAPL" for Apple.
-    :param api_key: Alpha Vantage API key from conf.yaml.
-    :return: DataFrame indexed by date with columns: open, high, low, close, volume.
-
-    :raises ValueError: If the ticker is invalid or the rate limit is hit.
-    :raises requests.HTTPError: If the network request fails.
-
-    Example:
-        df = fetch_daily_data("AAPL", api_key="YOUR_KEY")
-    """
-    logger.info(f"Fetching data for {ticker} from Alpha Vantage...")
-
-    url = (
-        "https://www.alphavantage.co/query"
-        "?function=TIME_SERIES_DAILY"
-        f"&symbol={ticker}"
-        "&outputsize=full"
-        f"&apikey={api_key}"
-    )
-
-    response = requests.get(url, timeout=30)
-    response.raise_for_status()
-    raw_json = response.json()
-
-    # Handle known Alpha Vantage error responses
-    if "Error Message" in raw_json:
-        raise ValueError(
-            f"Alpha Vantage rejected ticker '{ticker}': {raw_json['Error Message']}"
-        )
-    if "Note" in raw_json:
-        raise ValueError(
-            f"Alpha Vantage rate limit reached. Try again later. Detail: {raw_json['Note']}"
-        )
-    if "Information" in raw_json:
-        raise ValueError(
-            f"Alpha Vantage API key issue: {raw_json['Information']}"
-        )
-    if "Time Series (Daily)" not in raw_json:
-        raise ValueError(
-            f"Unexpected Alpha Vantage response for '{ticker}': {raw_json}"
-        )
-
-    # Parse the time series into a clean DataFrame
-    time_series = raw_json["Time Series (Daily)"]
-    df = pd.DataFrame.from_dict(time_series, orient="index")
-
-    # Rename columns from "1. open" style to clean "open" style
-    df.columns = ["open", "high", "low", "close", "volume"]
-
-    # Set index as proper datetime and sort oldest to newest
-    df.index = pd.to_datetime(df.index)
-    df.index.name = "date"
-    df.sort_index(inplace=True)
-
-    # Convert all values from strings to numbers
-    for col in df.columns:
-        df[col] = pd.to_numeric(df[col])
-
-    logger.info(
-        f"  Retrieved {len(df)} trading days for {ticker} "
-        f"({df.index.min().date()} to {df.index.max().date()})"
-    )
-    return df
-
-
-def filter_to_date_range(
-    df: pd.DataFrame,
-    start_date: str,
-    end_date: str
-) -> pd.DataFrame:
-    """
-    Filters a DataFrame to only include rows within a given date range.
-
-    :param df: Full DataFrame from fetch_daily_data().
-    :param start_date: Start of range as "YYYY-MM-DD", e.g. "2019-01-01".
-    :param end_date: End of range as "YYYY-MM-DD", e.g. "2024-12-31".
-    :return: Filtered DataFrame containing only dates within the range.
-
-    Example:
-        filtered = filter_to_date_range(df, "2019-01-01", "2024-12-31")
-    """
-    start = pd.to_datetime(start_date)
-    end = pd.to_datetime(end_date)
-    filtered = df.loc[(df.index >= start) & (df.index <= end)]
-    logger.info(
-        f"  Filtered to {len(filtered)} rows "
-        f"between {start_date} and {end_date}"
-    )
-    return filtered
-
-
-# ---------------------------------------------------------------------------
-# MINIO — STORAGE
-# ---------------------------------------------------------------------------
-
-def get_minio_client(config: dict) -> Minio:
-    """
-    Creates and returns a connected MinIO client.
-
-    MinIO is the object storage system used as our data lake.
-    It runs locally in Docker and stores raw data files in buckets.
-
-    :param config: Config dictionary from load_config().
-    :return: Connected Minio client object.
-
-    Example:
-        client = get_minio_client(config)
-    """
-    cfg = config["minio"]
-    client = Minio(
-        endpoint=cfg["endpoint"],
-        access_key=cfg["access_key"],
-        secret_key=cfg["secret_key"],
-        secure=cfg.get("secure", False),
-    )
-    logger.info(f"Connected to MinIO at {cfg['endpoint']}")
-    return client
-
-
-def ensure_bucket_exists(client: Minio, bucket_name: str) -> None:
-    """
-    Creates a MinIO bucket if it does not already exist.
-
-    A bucket is the top-level container in MinIO (like a root folder).
-    All raw data for this project lives inside one bucket.
-
-    :param client: Connected Minio client from get_minio_client().
-    :param bucket_name: Name of the bucket, e.g. "data-lake".
-
-    Example:
-        ensure_bucket_exists(client, "data-lake")
-    """
-    if not client.bucket_exists(bucket_name):
-        client.make_bucket(bucket_name)
-        logger.info(f"Created MinIO bucket: '{bucket_name}'")
-    else:
-        logger.info(f"MinIO bucket '{bucket_name}' already exists")
-
-
-def save_to_minio(
-    client: Minio,
-    bucket_name: str,
-    ticker: str,
-    df: pd.DataFrame,
-    as_of_date: str,
-    run_date: str,
-) -> str:
-    """
-    Saves a company's price DataFrame as a JSON file in MinIO.
-
-    Files are stored at this structured path inside the bucket:
-        raw/source_a/{TICKER}/as_of={AS_OF_DATE}/run_date={RUN_DATE}/data.json
-
-    Example path:
-        raw/source_a/AAPL/as_of=2024-02-13/run_date=2024-02-13/data.json
-
-    Path structure explained:
-        raw/        — untouched, unprocessed data
-        source_a/   — data from Alpha Vantage (Source A)
-        as_of=      — the latest date covered by this data
-        run_date=   — the date this pipeline actually ran
-
-    :param client: Connected Minio client.
-    :param bucket_name: Target bucket name.
-    :param ticker: Company ticker symbol, e.g. "AAPL".
-    :param df: DataFrame to save (from filter_to_date_range).
-    :param as_of_date: Latest date in the data, e.g. "2024-02-13".
-    :param run_date: Date the pipeline was executed, e.g. "2024-02-13".
-    :return: The full object path inside the bucket where data was saved.
-
-    Example:
-        path = save_to_minio(client, "data-lake", "AAPL", df,
-                             as_of_date="2024-02-13", run_date="2024-02-13")
-    """
-    object_path = (
-        f"raw/source_a/{ticker}/"
-        f"as_of={as_of_date}/"
-        f"run_date={run_date}/"
-        f"data.json"
-    )
-
-    # Convert DataFrame to JSON bytes for upload
-    df_copy = df.reset_index()
-    df_copy["date"] = df_copy["date"].astype(str)
-    json_bytes = df_copy.to_json(orient="records", indent=2).encode("utf-8")
-
-    client.put_object(
-        bucket_name=bucket_name,
-        object_name=object_path,
-        data=BytesIO(json_bytes),
-        length=len(json_bytes),
-        content_type="application/json",
-    )
-
-    logger.info(f"  Saved to MinIO: {bucket_name}/{object_path}")
-    return object_path
-
-
-# ---------------------------------------------------------------------------
-# MAIN PIPELINE
-# ---------------------------------------------------------------------------
-
-def run_extraction(
-    config_path: str = "config/conf.yaml",
-    run_date: str = None,
-    years_back: int = 5,
-) -> list:
-    """
-    Runs the full Extractor A pipeline end-to-end.
-
-    For each company in conf.yaml, this function:
-        1. Fetches full daily price history from Alpha Vantage
-        2. Filters to the required date range (default: 5 years back)
-        3. Saves the raw data as JSON to MinIO
-
-    If one company fails (e.g. bad ticker, rate limit), it logs the error
-    and continues processing the remaining companies.
-
-    :param config_path: Path to conf.yaml. Default: "config/conf.yaml".
-    :param run_date: Date to run as (YYYY-MM-DD). Defaults to today.
-    :param years_back: Years of history to capture. Default: 5.
-    :return: List of MinIO object paths where data was successfully saved.
-
-    Example:
-        # Standard run (today's date, 5 years back)
-        paths = run_extraction()
-
-        # Backfill run for a specific date
-        paths = run_extraction(run_date="2024-01-01", years_back=7)
-    """
-    # Set run_date to today if not provided
-    if run_date is None:
-        run_date = datetime.today().strftime("%Y-%m-%d")
-
-    # Calculate the start date (years_back years before run_date)
-    run_dt = datetime.strptime(run_date, "%Y-%m-%d")
-    start_date = (run_dt - timedelta(days=365 * years_back)).strftime("%Y-%m-%d")
-    end_date = run_date
-
-    logger.info("=" * 60)
-    logger.info("EXTRACTOR A — Alpha Vantage -> MinIO Pipeline")
-    logger.info(f"  Run date  : {run_date}")
-    logger.info(f"  Backfill  : {start_date} to {end_date} ({years_back} years)")
-    logger.info("=" * 60)
-
-    config = load_config(config_path)
-    api_key = config["api"]["alpha_vantage_key"]
-    companies = config["companies"]
-    bucket_name = config["minio"]["bucket"]
-
-    minio_client = get_minio_client(config)
-    ensure_bucket_exists(minio_client, bucket_name)
-
-    saved_paths = []
-
-    for i, ticker in enumerate(companies):
-        logger.info(f"\n[{i + 1}/{len(companies)}] Processing {ticker}...")
-
+    for attempt in range(max_retries):
         try:
-            full_df = fetch_daily_data(ticker, api_key)
-            filtered_df = filter_to_date_range(full_df, start_date, end_date)
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(period=period, auto_adjust=False)
+            if history is None or history.empty:
+                raise ValueError(f"No history returned for symbol={symbol}")
+            return ticker, history
+        except Exception as exc:  # pragma: no cover - network/runtime dependent
+            last_error = exc
+            if attempt < max_retries - 1:
+                time.sleep(2**attempt)
+            else:
+                raise RuntimeError(f"source_a history download failed for {symbol}: {exc}") from exc
 
-            if filtered_df.empty:
-                logger.warning(
-                    f"  No data for {ticker} between {start_date} and {end_date} — skipping"
-                )
-                continue
+    raise RuntimeError(f"source_a history download failed for {symbol}: {last_error}")
 
-            path = save_to_minio(
-                client=minio_client,
-                bucket_name=bucket_name,
-                ticker=ticker,
-                df=filtered_df,
-                as_of_date=end_date,
-                run_date=run_date,
-            )
-            saved_paths.append(path)
-            logger.info(f"  [OK] {ticker} saved successfully")
 
-        except ValueError as e:
-            logger.error(f"  [SKIP] {ticker} — {e}")
-
-        except Exception as e:
-            logger.error(f"  [ERROR] {ticker} — Unexpected error: {e}")
-
-        finally:
-            # Respect Alpha Vantage free tier limit (~5 requests/minute)
-            # Wait 12 seconds between each company request
-            if i < len(companies) - 1:
-                logger.info("  Waiting 12s (API rate limit)...")
-                time.sleep(12)
-
-    logger.info("\n" + "=" * 60)
-    logger.info(
-        f"Pipeline complete: {len(saved_paths)}/{len(companies)} companies saved to MinIO"
+def _download_price_history_alpha_vantage(
+    symbol: str, years_back: int, api_key: str, timeout_seconds: int = 30
+):
+    """Download adjusted daily prices from Alpha Vantage."""
+    _ = years_back  # endpoint returns full adjusted history; trimmed downstream by run_date
+    base_url = "https://www.alphavantage.co/query"
+    query = urlencode(
+        {
+            "function": "TIME_SERIES_DAILY_ADJUSTED",
+            "symbol": symbol,
+            "outputsize": "full",
+            "apikey": api_key,
+        }
     )
-    logger.info("=" * 60)
+    with urlopen(f"{base_url}?{query}", timeout=timeout_seconds) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
 
-    return saved_paths
+    if "Error Message" in payload:
+        raise RuntimeError(payload["Error Message"])
+    if "Note" in payload:
+        raise RuntimeError(payload["Note"])
+
+    series = payload.get("Time Series (Daily)")
+    if not isinstance(series, dict) or not series:
+        raise RuntimeError(f"Alpha Vantage returned no daily data for {symbol}")
+
+    rows: List[Dict[str, Any]] = []
+    for obs_date, values in series.items():
+        rows.append(
+            {
+                "observation_date": obs_date,
+                "Close": float(values.get("5. adjusted close") or values.get("4. close") or 0.0),
+                "Dividends": float(values.get("7. dividend amount") or 0.0),
+            }
+        )
+    history = pd.DataFrame(rows)
+    if history.empty:
+        raise RuntimeError(f"Alpha Vantage history dataframe empty for {symbol}")
+
+    history["observation_date"] = pd.to_datetime(history["observation_date"])
+    history = history.set_index("observation_date").sort_index()
+    return None, history
 
 
-# ---------------------------------------------------------------------------
-# INTEGRATION WRAPPER
-# This function provides the standardized interface expected by the team's
-# integration layer while using our internal pipeline implementation.
-# ---------------------------------------------------------------------------
+def _extract_total_debt(ticker: Any) -> Optional[float]:
+    try:
+        balance_sheet = ticker.quarterly_balance_sheet
+        debt_fields = ["Total Debt", "TotalDebt", "Long Term Debt", "LongTermDebt"]
+        for field in debt_fields:
+            if field in balance_sheet.index:
+                value = balance_sheet.loc[field].iloc[0]
+                if value is None:
+                    return None
+                return float(value)
+    except Exception:  # pragma: no cover - upstream schema dependent
+        return None
+    return None
+
+
+def _minio_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    minio_cfg = dict(config.get("minio") or {})
+    minio_cfg["endpoint"] = os.getenv("MINIO_ENDPOINT", minio_cfg.get("endpoint"))
+    minio_cfg["access_key"] = os.getenv("MINIO_ACCESS_KEY", minio_cfg.get("access_key"))
+    minio_cfg["secret_key"] = os.getenv("MINIO_SECRET_KEY", minio_cfg.get("secret_key"))
+    minio_cfg["bucket"] = os.getenv("MINIO_BUCKET", minio_cfg.get("bucket"))
+    endpoint = str(minio_cfg.get("endpoint", "")).replace("http://", "").replace("https://", "")
+    minio_cfg["endpoint"] = endpoint
+    return minio_cfg
+
+
+def _raw_object_path(symbol: str, run_date: str) -> str:
+    return (
+        "raw/source_a/pricing_fundamentals/"
+        f"run_date={run_date}/year={run_date[:4]}/symbol={symbol}.json"
+    )
+
+
+def _load_raw_from_minio(
+    config: Dict[str, Any], symbol: str, run_date: str
+) -> Optional[Dict[str, Any]]:
+    minio_cfg = _minio_config(config)
+    required = ["endpoint", "access_key", "secret_key", "bucket"]
+    if not all(minio_cfg.get(k) for k in required):
+        return None
+
+    try:
+        from minio import Minio
+
+        client = Minio(
+            endpoint=minio_cfg["endpoint"],
+            access_key=minio_cfg["access_key"],
+            secret_key=minio_cfg["secret_key"],
+            secure=minio_cfg.get("secure", False),
+        )
+        obj = client.get_object(minio_cfg["bucket"], _raw_object_path(symbol, run_date))
+        try:
+            return json.loads(obj.read().decode("utf-8"))
+        finally:
+            obj.close()
+            obj.release_conn()
+    except Exception:
+        return None
+
+
+def _save_raw_to_minio(
+    config: Dict[str, Any],
+    symbol: str,
+    run_date: str,
+    payload: Dict[str, Any],
+) -> None:
+    minio_cfg = _minio_config(config)
+    required = ["endpoint", "access_key", "secret_key", "bucket"]
+    if not all(minio_cfg.get(k) for k in required):
+        return
+
+    try:
+        from minio import Minio
+
+        client = Minio(
+            endpoint=minio_cfg["endpoint"],
+            access_key=minio_cfg["access_key"],
+            secret_key=minio_cfg["secret_key"],
+            secure=minio_cfg.get("secure", False),
+        )
+        bucket = minio_cfg["bucket"]
+        if not client.bucket_exists(bucket):
+            client.make_bucket(bucket)
+
+        object_path = _raw_object_path(symbol, run_date)
+        data = json.dumps(payload, ensure_ascii=False, default=_json_default).encode("utf-8")
+        client.put_object(
+            bucket,
+            object_path,
+            data=BytesIO(data),
+            length=len(data),
+            content_type="application/json",
+        )
+    except Exception as exc:  # pragma: no cover - external service dependent
+        logger.warning("source_a raw archive skipped for %s: %r", symbol, exc)
+
+
+def _compute_momentum_1m(close_series: pd.Series) -> pd.Series:
+    return close_series / close_series.shift(20) - 1.0
+
+
+def _compute_volatility_20d(close_series: pd.Series) -> pd.Series:
+    returns = close_series.pct_change()
+    return returns.rolling(window=20).std()
+
+
+def _build_technical_records(
+    symbol: str, history: Any, frequency: str, source_label: str
+) -> List[Dict[str, Any]]:
+    if len(history) < 20:
+        return []
+
+    close_series = history.get("Close")
+    if close_series is None:
+        return []
+    close_series = pd.to_numeric(close_series, errors="coerce").dropna()
+    close_series = close_series[close_series > 0]
+    if len(close_series) < 20:
+        return []
+
+    momentum = _compute_momentum_1m(close_series)
+    volatility = _compute_volatility_20d(close_series)
+
+    records: List[Dict[str, Any]] = []
+    for idx, value in momentum.dropna().items():
+        observation_date = idx.date().isoformat() if hasattr(idx, "date") else str(idx)[:10]
+        records.append(
+            {
+                "symbol": symbol,
+                "observation_date": observation_date,
+                "factor_name": "momentum_1m",
+                "value": float(value),
+                "source": source_label,
+                "frequency": frequency,
+            }
+        )
+    for idx, value in volatility.dropna().items():
+        observation_date = idx.date().isoformat() if hasattr(idx, "date") else str(idx)[:10]
+        records.append(
+            {
+                "symbol": symbol,
+                "observation_date": observation_date,
+                "factor_name": "volatility_20d",
+                "value": float(value),
+                "source": source_label,
+                "frequency": frequency,
+            }
+        )
+    return records
+
+
+def _build_records_from_history(
+    symbol: str,
+    history: Any,
+    run_date: str,
+    frequency: str,
+    total_debt: Optional[float],
+    source_label: str = "source_a",
+) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+
+    for idx, row in history.iterrows():
+        observation_date = idx.date().isoformat() if hasattr(idx, "date") else str(idx)[:10]
+
+        close = row.get("Close")
+        dividends = row.get("Dividends")
+
+        records.append(
+            {
+                "symbol": symbol,
+                "observation_date": observation_date,
+                "factor_name": "adjusted_close_price",
+                "value": None if close is None else float(close),
+                "source": source_label,
+                "frequency": frequency,
+            }
+        )
+        records.append(
+            {
+                "symbol": symbol,
+                "observation_date": observation_date,
+                "factor_name": "dividend_per_share",
+                "value": None if dividends is None else float(dividends),
+                "source": source_label,
+                "frequency": frequency,
+            }
+        )
+
+    records.append(
+        {
+            "symbol": symbol,
+            "observation_date": run_date,
+            "factor_name": "total_debt",
+            "value": total_debt,
+            "source": source_label,
+            "frequency": frequency,
+        }
+    )
+
+    return records
+
+
+def _resolve_alpha_key(config: Dict[str, Any]) -> str:
+    api_cfg = config.get("api") or {}
+    value = (
+        os.getenv("ALPHA_VANTAGE_API_KEY")
+        or os.getenv("ALPHA_VANTAGE_KEY")
+        or api_cfg.get("alpha_vantage_key")
+        or ""
+    )
+    value = str(value).strip()
+    if value in {"", "YOUR_KEY", "YOUR_API_KEY_HERE"}:
+        return ""
+    return value
+
+
+def _select_source_order(config: Dict[str, Any]) -> List[str]:
+    source_cfg = config.get("source_a") or {}
+    primary = str(source_cfg.get("primary_source", "alpha_vantage")).strip().lower()
+    fallback = bool(source_cfg.get("enable_yfinance_fallback", True))
+    order = [primary]
+    if fallback and primary != "yfinance":
+        order.append("yfinance")
+    if not order:
+        return ["alpha_vantage", "yfinance"]
+    return order
+
+
+def _select_provider_order_for_symbol(symbol: str, config: Dict[str, Any]) -> List[str]:
+    routing_cfg = config.get("routing") or {}
+
+    suffixes = routing_cfg.get("yf_for_suffixes", [".L", ".TO", ".PA", ".DE"])
+    symbol_upper = str(symbol).strip().upper()
+    has_suffix = any(symbol_upper.endswith(str(s).upper()) for s in suffixes)
+
+    blocklist = set(
+        str(x).strip().upper()
+        for x in routing_cfg.get(
+            "history_blocklist",
+            ["ABC", "ADS", "FB", "ATVI", "ABMD", "CELG"],
+        )
+        if str(x).strip()
+    )
+    history_policy = str(routing_cfg.get("history_ticker_policy", "skip")).strip().lower()
+
+    if symbol_upper in blocklist:
+        if history_policy == "try_yf_only":
+            return ["yfinance"]
+        return []
+
+    av_regex = str(routing_cfg.get("av_only_if_regex", "^[A-Z0-9]+$")).strip()
+    av_allowed = bool(re.fullmatch(av_regex, symbol_upper)) if av_regex else True
+
+    if has_suffix or not av_allowed:
+        return ["yfinance"]
+
+    return _select_source_order(config)
+
+
+def _history_from_payload(payload: Dict[str, Any]) -> pd.DataFrame:
+    rows = payload.get("history") or []
+    if not rows:
+        return pd.DataFrame()
+    frame = pd.DataFrame(rows)
+    if "Date" in frame.columns:
+        idx_col = "Date"
+    elif "observation_date" in frame.columns:
+        idx_col = "observation_date"
+    else:
+        idx_col = frame.columns[0]
+    frame[idx_col] = pd.to_datetime(frame[idx_col])
+    return frame.set_index(idx_col).sort_index()
+
+
+def _download_with_provider(
+    symbol: str,
+    years_back: int,
+    config: Dict[str, Any],
+    provider_order: Optional[List[str]] = None,
+) -> tuple[str, Any, pd.DataFrame]:
+    errors: List[str] = []
+    alpha_key = _resolve_alpha_key(config)
+    for source in provider_order or _select_source_order(config):
+        try:
+            if source == "alpha_vantage":
+                if not alpha_key:
+                    raise RuntimeError("alpha_vantage key missing")
+                ticker, history = _download_price_history_alpha_vantage(
+                    symbol, years_back, alpha_key
+                )
+            elif source == "yfinance":
+                ticker, history = _download_price_history(symbol, years_back)
+            else:
+                raise RuntimeError(f"unsupported provider: {source}")
+            return source, ticker, history
+        except Exception as exc:
+            errors.append(f"{source}: {exc}")
+    raise RuntimeError(f"all providers failed for {symbol}; details={errors}")
+
 
 def extract_source_a(
     symbols: List[str],
     run_date: str,
     backfill_years: int,
-    frequency: str
+    frequency: str,
+    config: Dict[str, Any] | None = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Integration wrapper for the main extraction pipeline.
-    
-    This function matches the team's integration contract: it accepts
-    a standardized set of parameters and returns metadata about the
-    extraction in a standardized format.
-    
-    NOTE: The actual data is saved to MinIO as raw JSON files. This function
-    returns metadata about what was extracted, not the data itself.
-    
-    :param symbols: List of stock ticker symbols (e.g. ["AAPL", "MSFT"]).
-                    Currently ignored — symbols are read from conf.yaml instead.
-    :param run_date: Date to run the extraction for, format "YYYY-MM-DD".
-    :param backfill_years: Number of years of historical data to fetch (default: 5).
-    :param frequency: Data frequency. Alpha Vantage only provides "daily" data.
-    :return: List of dictionaries with standardized metadata format.
-    
-    Example:
-        results = extract_source_a(
-            symbols=["AAPL", "MSFT"],
-            run_date="2024-02-13",
-            backfill_years=5,
-            frequency="daily"
-        )
-    """
-    logger.info("=" * 60)
-    logger.info("INTEGRATION WRAPPER — extract_source_a() called")
-    logger.info(f"  Requested symbols: {symbols}")
-    logger.info(f"  Run date: {run_date}")
-    logger.info(f"  Backfill years: {backfill_years}")
-    logger.info(f"  Frequency: {frequency}")
-    logger.info("=" * 60)
-    
-    # Note: We read the actual symbol list from conf.yaml, not from the parameter
-    # This is documented in the handover notes
-    config = load_config("config/conf.yaml")
-    actual_symbols = config["companies"]
-    
-    logger.info(f"NOTE: Using symbols from conf.yaml: {actual_symbols}")
-    logger.info(f"(Ignoring function parameter symbols: {symbols})")
-    
-    # Run the main extraction pipeline
-    # This saves raw JSON data to MinIO and returns the storage paths
-    saved_paths = run_extraction(
-        config_path="config/conf.yaml",
-        run_date=run_date,
-        years_back=backfill_years
-    )
-    
-    # Build the standardized return format expected by the integration layer
-    # Each symbol gets one metadata record
-    results = []
-    for symbol in actual_symbols:
-        results.append({
-            "symbol": symbol,
-            "observation_date": run_date,
-            "factor_name": "daily_price_data",
-            "factor_value": float(len(saved_paths)),  # Number of companies successfully processed
-            "source": "alpha_vantage",
-            "metric_frequency": "daily",  # Alpha Vantage only provides daily data
-        })
-    
-    logger.info(f"\nReturning metadata for {len(results)} symbols")
-    return results
+    """Extract Source A records for a symbol list.
 
+    Parameters
+    ----------
+    symbols:
+        Target symbol list supplied by upstream universe selection.
+    run_date:
+        Pipeline run date in ``YYYY-MM-DD`` format.
+    backfill_years:
+        Historical lookback window in years.
+    frequency:
+        Scheduling frequency label (daily/weekly/monthly/quarterly/annual).
+    config:
+        Optional in-memory config. If omitted, config is loaded from file.
 
-# ---------------------------------------------------------------------------
-# ENTRY POINT
-# Runs only when this file is executed directly (not when imported).
-# ---------------------------------------------------------------------------
+    Returns
+    -------
+    list[dict[str, Any]]
+        Extracted records in the pre-normalized schema used by downstream
+        normalize/quality/load stages.
+    """
+    if os.getenv("CW1_TEST_MODE") == "1":
+        return [
+            {
+                "symbol": symbol,
+                "observation_date": run_date,
+                "factor_name": "source_a_metric",
+                "value": 1.0,
+                "source": "source_a_test",
+                "frequency": frequency,
+            }
+            for symbol in symbols
+        ]
+
+    cfg = config or load_config("config/conf.yaml")
+    target_symbols = list(symbols or [])
+    if not target_symbols:
+        return []
+    source_cfg = cfg.get("source_a") or {}
+    use_cache = bool(source_cfg.get("use_cache", False))
+
+    records: List[Dict[str, Any]] = []
+    for symbol in target_symbols:
+        try:
+            symbol_records: List[Dict[str, Any]] = []
+            provider_order = _select_provider_order_for_symbol(symbol, cfg)
+            if not provider_order:
+                logger.info("source_a skipped by routing policy for symbol=%s", symbol)
+                continue
+            payload = _load_raw_from_minio(cfg, symbol, run_date) if use_cache else None
+            provider_source = "cache_replay"
+            ticker = None
+
+            if payload:
+                history = _history_from_payload(payload)
+                total_debt = payload.get("total_debt")
+                provider_source = str(payload.get("source_used") or "cache_replay")
+            else:
+                provider_source, ticker, history = _download_with_provider(
+                    symbol, backfill_years, cfg, provider_order=provider_order
+                )
+                total_debt = _extract_total_debt(ticker)
+                payload = {
+                    "symbol": symbol,
+                    "run_date": run_date,
+                    "rows": int(len(history)),
+                    "history": history.reset_index().to_dict(orient="records"),
+                    "total_debt": total_debt,
+                    "source_used": provider_source,
+                }
+                _save_raw_to_minio(cfg, symbol, run_date, payload)
+
+            symbol_records.extend(
+                _build_records_from_history(
+                    symbol=symbol,
+                    history=history,
+                    run_date=run_date,
+                    frequency=frequency,
+                    total_debt=total_debt,
+                    source_label=provider_source,
+                )
+            )
+            symbol_records.extend(
+                _build_technical_records(
+                    symbol=symbol,
+                    history=history,
+                    frequency=frequency,
+                    source_label=provider_source,
+                )
+            )
+            records.extend(symbol_records)
+        except Exception as exc:
+            logger.error("source_a failed for %s: %r", symbol, exc)
+
+    return records
+
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Extractor A: Fetch stock data from Alpha Vantage and save to MinIO"
-    )
-    parser.add_argument(
-        "--run-date",
-        type=str,
-        default=None,
-        help="Date to run the pipeline for (YYYY-MM-DD). Defaults to today.",
-    )
-    parser.add_argument(
-        "--years-back",
-        type=int,
-        default=5,
-        help="Number of years of historical data to fetch. Default: 5",
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="config/conf.yaml",
-        help="Path to the config file. Default: config/conf.yaml",
-    )
-
-    args = parser.parse_args()
-
-    run_extraction(
-        config_path=args.config,
-        run_date=args.run_date,
-        years_back=args.years_back,
-    )
+    today = datetime.today().strftime("%Y-%m-%d")
+    out = extract_source_a(["AAPL"], run_date=today, backfill_years=1, frequency="daily")
+    print(f"records={len(out)}")

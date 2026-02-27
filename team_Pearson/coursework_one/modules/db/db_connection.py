@@ -1,30 +1,45 @@
 from __future__ import annotations
 
+"""PostgreSQL connection utilities based on environment variables."""
+
 import os
-import psycopg2
-from psycopg2.extensions import connection
+
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
 
-def get_db_connection() -> connection:
-    """
-    Create a PostgreSQL connection using environment variables.
-    """
+def _build_db_url() -> str:
     host = os.getenv("POSTGRES_HOST", "localhost")
-    port = int(os.getenv("POSTGRES_PORT", "5439"))
+    port = os.getenv("POSTGRES_PORT", "5439")
     dbname = os.getenv("POSTGRES_DB", "postgres")
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "postgres")
+    return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
 
+
+def get_db_engine() -> Engine:
+    """Create a SQLAlchemy engine for PostgreSQL.
+
+    Returns
+    -------
+    sqlalchemy.engine.Engine
+        Database engine configured from ``POSTGRES_*`` environment variables.
+
+    Raises
+    ------
+    RuntimeError
+        If engine initialization fails.
+    """
     try:
-        return psycopg2.connect(
-            host=host,
-            port=port,
-            dbname=dbname,
-            user=user,
-            password=password,
-        )
-    except psycopg2.OperationalError as e:
+        return create_engine(_build_db_url())
+    except Exception as e:
         raise RuntimeError(
-            "PostgreSQL connection failed. Check Docker/Postgres is running and "
+            "PostgreSQL engine initialization failed. Check Docker/Postgres is running and "
             "POSTGRES_HOST/PORT/DB/USER/PASSWORD environment variables are correct."
         ) from e
+
+
+def get_db_connection():
+    """Backward-compatible raw DB-API connection for existing callers."""
+    engine = get_db_engine()
+    return engine.raw_connection()

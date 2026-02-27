@@ -42,7 +42,7 @@ Translate the investment factors defined by the PM into strict, technical data s
 - Data_catalog
 
 **Acceptance Criteria (Definition of Done):**
-- [ ] **Data Requirements Log:** Update `docs/data_requirements_log.md` with explicit missing data tolerance rules and look-ahead bias prevention.
+- [ ] **Data Requirements Log:** Update `docs/data_requirement.md` with explicit missing data tolerance rules and look-ahead bias prevention.
 - [ ] **Architecture Diagrams:** Create high-level system architecture diagrams using `draw.io` or `lucidcharts` to visually map the data flow from External APIs / Internal DB → MinIO → PostgreSQL.
 - [ ] **Documentation Handoff:** Ensure all requirement logs and diagrams are formatted in standard Markdown (`.md`) and handed over to the developer managing the Sphinx repository (Role 5) for integration.
 ---
@@ -63,7 +63,7 @@ Design a scalable storage solution utilizing PostgreSQL and MinIO. Ensure that a
 - Extended `docker-compose` configurations if necessary.
 
 **Acceptance Criteria (Definition of Done):**
-- [ ] **PostgreSQL DDL:** Provide the SQL script to create `factor_observations` in `systematic_equity`. Must include a composite primary key (`symbol`, `observation_date`, `factor_name`) and proper indexes.
+- [ ] **PostgreSQL DDL:** Provide the SQL script to create `factor_observations` in `systematic_equity`. Must enforce uniqueness on (`symbol`, `observation_date`, `factor_name`) and include proper indexes.
 - [ ] **MinIO Data Lake Pathing:** Define the exact folder structure for raw unstructured files. Required format: `raw/{source_name}/{dataset_type}/observation_date={YYYY-MM-DD}/run_date={YYYY-MM-DD}/`.
 - [ ] **Robustness:** The database design must be flexible enough to handle the addition or removal of companies from the `company_static` table.
 - [ ] **Containerization Compliance:** Ensure any additional components designed for the infrastructure (e.g., Kafka for streaming, Airflow for scheduling) are strictly containerized using Docker, extending the provided `docker-compose.yml`.
@@ -90,7 +90,8 @@ Set up the fundamental project architecture using Poetry. Enforce the strict fol
 
 **Acceptance Criteria (Definition of Done):**
 - [ ] **Toolchain Configuration:** Initialize with `poetry init`. Configure `flake8`, `black`, `isort`, and `bandit` (or `safety`) for security scans.
-- [ ] **Strict Folder Structure:** All developments MUST be placed under `team_<insert your team id>/coursework_one/` containing EXACTLY the following subfolders: `config/`, `modules/` (with `db/`, `input/`, `output/` sub-directories), `static/`, and `test/`.You MUST also initialize a README.md and a CHANGELOG.md at the root of the team folder exactly as shown in the coursework specifications.
+<<<<<<< HEAD
+- [ ] **Strict Folder Structure:** All developments MUST be placed under `team_<insert your team id>/coursework_one/` and include `config/`, `modules/` (with `db/`, `input/`, `output/` sub-directories), and a test directory (`tests/` or `test/`). You MUST also initialize a `README.md` and a `CHANGELOG.md` at the team root as shown in the coursework specifications.
 - [ ] **Database Isolation:** Do NOT copy databases into other folders. Ensure any changes outside the group folder (e.g., `000.Database`) are un-staged before committing to Git.
 - [ ] **CLI & Scheduling:** `Main.py` must support `--run-date` and `--frequency`. Implement or mock a scheduling library (like `APScheduler` or `Airflow`) to satisfy the "Application Flexibility" requirement.
 - [ ] **Security Vulnerability Fixes:** Configure bandit (or safety) for security scans. You must implement a process to not just scan, but promptly address and fix any identified vulnerabilities before code is merged.
@@ -137,7 +138,7 @@ Develop the data ingestion pipeline to pull historical structured pricing and de
 - Company list from `get_company_universe()`.
 
 **Outputs:**
-- `modules/input/extract_alphavantage.py` (or equivalent source-specific extractor module).
+- `modules/input/extract_source_a.py` (or equivalent source-specific extractor module).
 
 **Acceptance Criteria (Definition of Done):**
 
@@ -188,7 +189,7 @@ Enhance the dataset by ingesting unstructured alternative data (news headlines) 
 - Company list from `get_company_universe()`.
 
 **Outputs:**
-- `modules/input/extract_sentiment.py` (**Must `return` a clean Pandas DataFrame for Role 8**).
+- `modules/input/extract_source_b.py` (**Must `return` a clean Pandas DataFrame for Role 8**).
 
 **Acceptance Criteria (Definition of Done):**
 
@@ -214,8 +215,8 @@ Act as the central integration point. Call the extraction modules (Roles 6 & 7) 
 - Investable universe mapping from PostgreSQL `company_static`.
 
 **Outputs:**
-- `modules/transform/normalize.py`
-- `modules/quality/checks.py`
+- `modules/output/normalize.py`
+- `modules/output/quality.py`
 - Comprehensive `pytest` test suite.
 
 **Acceptance Criteria (Definition of Done):**

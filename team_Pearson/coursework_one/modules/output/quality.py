@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+"""Quality checks for normalized factor observation records."""
 
+from typing import Any, Dict, List, Optional, Tuple
 
 _ALLOWED_FREQUENCIES = {"daily", "weekly", "monthly", "quarterly", "annual", "unknown"}
 
@@ -40,28 +41,27 @@ def _is_non_finite_number(x: Any) -> bool:
 
 
 def run_quality_checks(records: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Quality checks for normalized records.
+    """Run data quality checks and return a summary report.
 
-    Keeps backward-compatible keys:
-      - row_count
-      - missing_values  (factor_value is None)
-      - duplicates      (DB-unique-key duplicates)
+    Parameters
+    ----------
+    records:
+        Normalized records from :func:`modules.output.normalize.normalize_records`.
 
-    Adds extra helpful counters (won't break downstream):
-      - missing_required
-      - invalid_frequency
-      - non_numeric_or_non_finite
-
-    IMPORTANT: duplicates are counted using the DB unique key:
-      (symbol, factor_name, observation_date)
-    This matches init.sql + load.py ON CONFLICT behavior.
+    Returns
+    -------
+    dict[str, Any]
+        Quality report with counts such as ``row_count``, ``missing_values``,
+        ``duplicates``, ``missing_required``, ``invalid_frequency``,
+        ``non_numeric_or_non_finite``, and ``passed``.
     """
     row_count = len(records)
     missing_values = sum(1 for r in records if r.get("factor_value") is None)
     missing_required = sum(1 for r in records if _is_missing_required(r))
     invalid_frequency = sum(1 for r in records if _is_invalid_frequency(r.get("metric_frequency")))
-    non_numeric_or_non_finite = sum(1 for r in records if _is_non_finite_number(r.get("factor_value")))
+    non_numeric_or_non_finite = sum(
+        1 for r in records if _is_non_finite_number(r.get("factor_value"))
+    )
 
     # Duplicates by DB unique key
     seen: set[Tuple[Any, Any, Any]] = set()
