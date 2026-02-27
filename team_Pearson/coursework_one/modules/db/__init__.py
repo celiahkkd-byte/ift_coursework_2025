@@ -1,4 +1,6 @@
-from .db_connection import get_db_connection
+"""Database access helpers (Postgres)."""
 
-__all__ = ["get_db_connection"]
+from .db_connection import get_db_connection, get_db_engine
+from .universe import get_company_count, get_company_universe
 
+__all__ = ["get_db_connection", "get_db_engine", "get_company_universe", "get_company_count"]

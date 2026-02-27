@@ -72,7 +72,7 @@ Do not modify others' modules or `Main.py` without agreement.
 未经沟通，不要改别人模块和 `Main.py`。
 
 ## 3) Fixed interface contracts / 固定接口契约（函数名不可改）
-1. `modules.db.get_company_universe(company_limit: int) -> list[str]`
+1. `modules.db.get_company_universe(company_limit: int, country_allowlist: list[str] | None = None) -> list[str]`
 2. `modules.input.extract_source_a(symbols, run_date, backfill_years, frequency) -> list[dict]`
 3. `modules.input.extract_source_b(symbols, run_date, backfill_years, frequency) -> list[dict]`
 4. `modules.output.normalize_records(records) -> list[dict]`
@@ -251,7 +251,7 @@ Current data requirements reference / 当前需求对应频率示例:
   - `MONGO_PORT=27019`
   - `MONGO_DB=admin`
 - MinIO:
-  - `MINIO_ENDPOINT=http://localhost:9000`
+  - `MINIO_ENDPOINT=localhost:9000`
   - `MINIO_ACCESS_KEY=ift_bigdata`
   - `MINIO_SECRET_KEY=minio_password`
   - `MINIO_BUCKET=csreport`
@@ -286,7 +286,7 @@ Current data requirements reference / 当前需求对应频率示例:
   - `MONGO_PORT=27019`
   - `MONGO_DB=admin`
 - MinIO：
-  - `MINIO_ENDPOINT=http://localhost:9000`
+  - `MINIO_ENDPOINT=localhost:9000`
   - `MINIO_ACCESS_KEY=ift_bigdata`
   - `MINIO_SECRET_KEY=minio_password`
   - `MINIO_BUCKET=csreport`

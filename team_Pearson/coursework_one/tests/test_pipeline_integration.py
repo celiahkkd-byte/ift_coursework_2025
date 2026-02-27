@@ -1,12 +1,10 @@
-import os
-os.environ["CW1_TEST_MODE"] = "1"
-
 import Main
 from modules.output.normalize import normalize_records
 from modules.output.quality import run_quality_checks
 
 
-def test_collect_normalize_quality_chain():
+def test_collect_normalize_quality_chain(monkeypatch):
+    monkeypatch.setenv("CW1_TEST_MODE", "1")
     symbols = ["SYM00001", "SYM00002"]
 
     raw = Main.collect_raw_records(symbols, "2026-02-14", "daily", 5)

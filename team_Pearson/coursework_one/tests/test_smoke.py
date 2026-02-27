@@ -56,3 +56,15 @@ def test_main_runs_daily_dry_run_smoke(tmp_path):
     assert res.returncode == 0, f"stdout:\n{res.stdout}\n\nstderr:\n{res.stderr}"
     assert "run_log_written_to" in res.stdout
     assert "quality=" in res.stdout
+
+
+def test_summarize_provider_usage_counts_only_total_debt_rows():
+    import Main
+
+    rows = [
+        {"symbol": "AAPL", "factor_name": "adjusted_close_price", "source": "alpha_vantage"},
+        {"symbol": "AAPL", "factor_name": "total_debt", "source": "alpha_vantage"},
+        {"symbol": "MSFT", "factor_name": "total_debt", "source": "yfinance"},
+    ]
+    out = Main.summarize_provider_usage(rows)
+    assert out == {"alpha_vantage": 1, "yfinance": 1}

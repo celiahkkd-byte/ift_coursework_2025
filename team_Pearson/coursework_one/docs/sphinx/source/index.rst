@@ -1,23 +1,18 @@
-# API Reference
-.. ift_coursework_one_team_Pearson documentation master file, created by
-   sphinx-quickstart on Sat Feb 21 14:21:03 2026.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+IFT Coursework One (Team Pearson)
+=================================
 
-ift_coursework_one_team_Pearson documentation
-=============================================
+This site documents the runnable CW1 pipeline framework for:
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
-
+- structured extraction (`source_a`)
+- normalization and quality checks
+- PostgreSQL upsert storage
+- configurable extractor toggles in the main pipeline
 
 .. toctree::
    :maxdepth: 2
+   :caption: Contents
 
    installation
    usage
    architecture
    api
-   
-
