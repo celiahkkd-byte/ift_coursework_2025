@@ -83,7 +83,9 @@ def _download_price_history(symbol: str, years_back: int, max_retries: int = 3):
     raise RuntimeError(f"source_a history download failed for {symbol}: {last_error}")
 
 
-def _apply_history_window(history: pd.DataFrame, run_date: str, backfill_years: int) -> pd.DataFrame:
+def _apply_history_window(
+    history: pd.DataFrame, run_date: str, backfill_years: int
+) -> pd.DataFrame:
     """Trim history to [run_date - backfill_window, run_date]. backfill_years=0 => run_date only."""
     if history is None or history.empty:
         return history
@@ -248,7 +250,9 @@ def _extract_fundamentals_from_yfinance_ticker(ticker: Any) -> Dict[str, Any]:
                     if total_shareholder_equity is not None:
                         break
         except Exception:
-            pass
+            logger.debug(
+                "source_a_equity_fallback_failed reason=quarterly_balance_sheet_unavailable"
+            )
 
     return {
         "total_debt": total_debt,
@@ -315,7 +319,8 @@ def _extract_fundamentals(
                 )
         except Exception as exc:
             logger.warning(
-                "alpha_vantage_overview_failed symbol=%s reason=%r; falling back to yfinance fields",
+                "alpha_vantage_overview_failed symbol=%s reason=%r; "
+                "falling back to yfinance fields",
                 symbol,
                 exc,
             )
@@ -564,9 +569,9 @@ def _build_fundamental_records(
     report_date_raw = fundamentals.get("report_date")
     report_date = str(report_date_raw or "").strip()[:10] or None
     currency = str(fundamentals.get("currency") or "UNKNOWN").strip().upper() or "UNKNOWN"
-    metric_definition = str(
-        fundamentals.get("metric_definition") or "provider_reported"
-    ).strip().lower()
+    metric_definition = (
+        str(fundamentals.get("metric_definition") or "provider_reported").strip().lower()
+    )
     for key, (factor_name, period_type) in field_map.items():
         out.append(
             {
@@ -606,9 +611,7 @@ def _resolve_alpha_key_with_source(config: Dict[str, Any]) -> tuple[str, str]:
     if env_alias:
         return env_alias, "env"
 
-    conf_value = _sanitize_alpha_key(
-        api_cfg.get("alpha_vantage_key") or legacy_cfg.get("api_key")
-    )
+    conf_value = _sanitize_alpha_key(api_cfg.get("alpha_vantage_key") or legacy_cfg.get("api_key"))
     if conf_value:
         return conf_value, "conf"
 
@@ -680,11 +683,15 @@ def _validate_cache_payload(payload: Dict[str, Any], symbol: str, run_date: str)
     warnings: List[str] = []
     payload_symbol = str(payload.get("symbol") or "").strip().upper()
     if payload_symbol and payload_symbol != str(symbol).strip().upper():
-        warnings.append(f"symbol_mismatch cache={payload_symbol} request={str(symbol).strip().upper()}")
+        warnings.append(
+            f"symbol_mismatch cache={payload_symbol} request={str(symbol).strip().upper()}"
+        )
 
     payload_run_date = str(payload.get("run_date") or "").strip()
     if payload_run_date and payload_run_date != str(run_date).strip():
-        warnings.append(f"run_date_mismatch cache={payload_run_date} request={str(run_date).strip()}")
+        warnings.append(
+            f"run_date_mismatch cache={payload_run_date} request={str(run_date).strip()}"
+        )
 
     history_rows = payload.get("history") or []
     row_count = payload.get("rows")
@@ -705,7 +712,9 @@ def _download_with_provider(
     resolved_order = provider_order or _select_source_order(config)
     if "alpha_vantage" in resolved_order and not alpha_key:
         logger.warning(
-            "alpha_vantage key missing source=%s checked=[ALPHA_VANTAGE_API_KEY,ALPHA_VANTAGE_KEY,api.alpha_vantage_key,alpha_vantage.api_key]",
+            "alpha_vantage key missing source=%s "
+            "checked=[ALPHA_VANTAGE_API_KEY,ALPHA_VANTAGE_KEY,api.alpha_vantage_key,"
+            "alpha_vantage.api_key]",
             alpha_key_source,
         )
     for source in resolved_order:

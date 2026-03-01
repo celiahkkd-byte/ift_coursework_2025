@@ -68,12 +68,14 @@ def _flush_quality_event_summary() -> None:
     if stale == 0 and expired == 0:
         return
     logger.warning(
-        "quality_event_summary stale_count=%s expired_count=%s stale_by_factor=%s expired_by_factor=%s",
+        "quality_event_summary stale_count=%s expired_count=%s "
+        "stale_by_factor=%s expired_by_factor=%s",
         stale,
         expired,
         _QUALITY_EVENT_COUNTS["stale_by_factor"],
         _QUALITY_EVENT_COUNTS["expired_by_factor"],
     )
+
 
 ALTERNATIVE_ATOMIC_FACTORS = {
     "news_sentiment_daily",
@@ -549,7 +551,9 @@ def _compute_technical_factors_daily(df, end_date: date, start_date: date) -> Li
         ps = price[price["symbol"] == symbol].sort_values("observation_date").copy()
         if ps.empty:
             continue
-        ps = ps[(ps["observation_date"] >= start_date) & (ps["observation_date"] <= end_date)].copy()
+        ps = ps[
+            (ps["observation_date"] >= start_date) & (ps["observation_date"] <= end_date)
+        ].copy()
         if ps.empty:
             continue
         ps = ps.dropna(subset=["price"])
@@ -610,7 +614,11 @@ def _compute_sentiment_30d_avg(df, end_date: date, start_date: date) -> List[Dic
     symbols = set(sentiment_atomic["symbol"].dropna().unique())
     symbols.update(count_atomic["symbol"].dropna().unique())
     for symbol in sorted(symbols):
-        ds = sentiment_atomic[sentiment_atomic["symbol"] == symbol].sort_values("observation_date").copy()
+        ds = (
+            sentiment_atomic[sentiment_atomic["symbol"] == symbol]
+            .sort_values("observation_date")
+            .copy()
+        )
         ds["sentiment"] = pd.to_numeric(ds["sentiment"], errors="coerce")
         ds["observation_ts"] = pd.to_datetime(ds["observation_date"], errors="coerce")
         ds = ds.dropna(subset=["sentiment", "observation_ts"])
@@ -753,7 +761,8 @@ def _load_atomic_records_from_postgres(
 
     market_sql = text(
         """
-        SELECT symbol, observation_date, factor_name, factor_value, source, metric_frequency, source_report_date
+        SELECT symbol, observation_date, factor_name, factor_value, source,
+               metric_frequency, source_report_date
         FROM systematic_equity.factor_observations
         WHERE observation_date BETWEEN :start_date AND :end_date
           AND factor_name = ANY(:factor_names)
@@ -762,7 +771,8 @@ def _load_atomic_records_from_postgres(
     )
     market_sql_with_symbols = text(
         """
-        SELECT symbol, observation_date, factor_name, factor_value, source, metric_frequency, source_report_date
+        SELECT symbol, observation_date, factor_name, factor_value, source,
+               metric_frequency, source_report_date
         FROM systematic_equity.factor_observations
         WHERE observation_date BETWEEN :start_date AND :end_date
           AND factor_name = ANY(:factor_names)
@@ -811,7 +821,8 @@ def _load_atomic_records_from_postgres(
 
     fallback_financial_sql = text(
         """
-        SELECT symbol, observation_date, factor_name, factor_value, source, metric_frequency, source_report_date
+        SELECT symbol, observation_date, factor_name, factor_value, source,
+               metric_frequency, source_report_date
         FROM systematic_equity.factor_observations
         WHERE observation_date BETWEEN :start_date AND :end_date
           AND factor_name = ANY(:factor_names)
@@ -820,7 +831,8 @@ def _load_atomic_records_from_postgres(
     )
     fallback_financial_sql_with_symbols = text(
         """
-        SELECT symbol, observation_date, factor_name, factor_value, source, metric_frequency, source_report_date
+        SELECT symbol, observation_date, factor_name, factor_value, source,
+               metric_frequency, source_report_date
         FROM systematic_equity.factor_observations
         WHERE observation_date BETWEEN :start_date AND :end_date
           AND factor_name = ANY(:factor_names)
@@ -843,10 +855,13 @@ def _load_atomic_records_from_postgres(
             financial_rows = conn.execute(selected_financial_sql, financial_params).mappings().all()
         except Exception as exc:
             logger.warning(
-                "financial_source_fallback=True reason=%r source=financial_observations fallback=factor_observations",
+                "financial_source_fallback=True reason=%r "
+                "source=financial_observations fallback=factor_observations",
                 exc,
             )
-            financial_rows = conn.execute(selected_fallback_sql, fallback_financial_params).mappings().all()
+            financial_rows = (
+                conn.execute(selected_fallback_sql, fallback_financial_params).mappings().all()
+            )
 
     rows = [dict(r) for r in market_rows]
     rows.extend(dict(r) for r in financial_rows)

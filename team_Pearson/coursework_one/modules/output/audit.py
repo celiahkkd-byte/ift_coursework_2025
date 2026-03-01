@@ -104,7 +104,8 @@ def write_pipeline_run_finish(
             company_limit, enabled_extractors, rows_written, error_message, error_traceback, notes
         ) VALUES (
             :run_id, :run_date, :finished_at, :finished_at, :status, :frequency, :backfill_years,
-            :company_limit, :enabled_extractors, :rows_written, :error_message, :error_traceback, :notes
+            :company_limit, :enabled_extractors, :rows_written, :error_message,
+            :error_traceback, :notes
         )
         ON CONFLICT (run_id) DO UPDATE
         SET finished_at = EXCLUDED.finished_at,

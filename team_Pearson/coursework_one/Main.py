@@ -177,15 +177,9 @@ def apply_env_defaults_from_config(cfg: Dict[str, Any]) -> Dict[str, str]:
 
 def _configure_logging(log_cfg: Dict[str, Any]) -> None:
     level = str(
-        os.getenv("CW1_LOG_LEVEL")
-        or log_cfg.get("level")
-        or log_cfg.get("log_level")
-        or "INFO"
+        os.getenv("CW1_LOG_LEVEL") or log_cfg.get("level") or log_cfg.get("log_level") or "INFO"
     ).upper()
-    fmt = str(
-        log_cfg.get("format")
-        or "%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
+    fmt = str(log_cfg.get("format") or "%(asctime)s %(levelname)s %(name)s %(message)s")
 
     root = logging.getLogger()
     if root.handlers:
@@ -234,9 +228,7 @@ def _resolve_backfill_years(cli_value: Optional[int], pipeline_cfg: Dict[str, An
     try:
         years = int(raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"Invalid backfill_years={raw!r}. Expected integer >= 0."
-        ) from exc
+        raise ValueError(f"Invalid backfill_years={raw!r}. Expected integer >= 0.") from exc
     if years < 0:
         raise ValueError(f"Invalid backfill_years={years}. Expected integer >= 0.")
     return years
@@ -254,9 +246,7 @@ def _resolve_company_limit(cli_value: Optional[int], pipeline_cfg: Dict[str, Any
     try:
         limit = int(raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"Invalid company_limit={raw!r}. Expected integer or null."
-        ) from exc
+        raise ValueError(f"Invalid company_limit={raw!r}. Expected integer or null.") from exc
     if limit <= 0:
         return None
     return limit
@@ -292,9 +282,7 @@ def _resolve_enabled_extractors(
 
     invalid = sorted(x for x in out if x not in ALLOWED_EXTRACTORS)
     if invalid:
-        raise ValueError(
-            f"Invalid enabled_extractors={invalid}. Allowed: source_a, source_b."
-        )
+        raise ValueError(f"Invalid enabled_extractors={invalid}. Allowed: source_a, source_b.")
     return out
 
 
@@ -377,7 +365,9 @@ def collect_raw_records(
             )
         except Exception as exc:
             err = f"{exc!r}"
-            logger.exception("extractor_failed run_date=%s extractor=source_a error=%s", run_date, err)
+            logger.exception(
+                "extractor_failed run_date=%s extractor=source_a error=%s", run_date, err
+            )
             if extractor_errors_out is not None:
                 extractor_errors_out.append({"extractor": "source_a", "error": err})
 
@@ -390,7 +380,9 @@ def collect_raw_records(
             )
         except Exception as exc:
             err = f"{exc!r}"
-            logger.exception("extractor_failed run_date=%s extractor=source_b error=%s", run_date, err)
+            logger.exception(
+                "extractor_failed run_date=%s extractor=source_b error=%s", run_date, err
+            )
             if extractor_errors_out is not None:
                 extractor_errors_out.append({"extractor": "source_b", "error": err})
 
@@ -612,7 +604,9 @@ def run_pipeline_stage(ctx: RunContext, state: PipelineState) -> None:
                 len(extractor_errors),
                 json.dumps(extractor_errors, ensure_ascii=False),
             )
-            state.notes = _append_note(state.notes, f"extractor_error_count={len(extractor_errors)}")
+            state.notes = _append_note(
+                state.notes, f"extractor_error_count={len(extractor_errors)}"
+            )
             state.notes = _append_note(
                 state.notes,
                 f"extractor_errors={json.dumps(extractor_errors, ensure_ascii=False)}",
@@ -625,7 +619,9 @@ def run_pipeline_stage(ctx: RunContext, state: PipelineState) -> None:
 
         state.provider_usage = summarize_provider_usage(raw)
         if state.provider_usage:
-            state.notes = f"{state.notes}; provider_usage={json.dumps(state.provider_usage, sort_keys=True)}"
+            state.notes = (
+                f"{state.notes}; provider_usage={json.dumps(state.provider_usage, sort_keys=True)}"
+            )
         logger.info(
             "stage_ok run_id=%s stage=extract records=%s provider_usage=%s",
             ctx.run_id,
@@ -680,7 +676,9 @@ def run_pipeline_stage(ctx: RunContext, state: PipelineState) -> None:
 
         t0 = time.monotonic()
         curated_load_stats: Dict[str, int] = {}
-        state.loaded_rows = load_curated(curated, dry_run=ctx.args.dry_run, stats_out=curated_load_stats)
+        state.loaded_rows = load_curated(
+            curated, dry_run=ctx.args.dry_run, stats_out=curated_load_stats
+        )
         state.notes = _append_note(
             state.notes,
             f"load_curated_stats={json.dumps(curated_load_stats, sort_keys=True)}",
@@ -716,7 +714,8 @@ def run_pipeline_stage(ctx: RunContext, state: PipelineState) -> None:
             f"load_financial_stats={json.dumps(financial_load_stats, sort_keys=True)}",
         )
         logger.info(
-            "stage_ok run_id=%s stage=load_financial rows=%s total_loaded_rows=%s dry_run=%s stats=%s",
+            "stage_ok run_id=%s stage=load_financial rows=%s "
+            "total_loaded_rows=%s dry_run=%s stats=%s",
             ctx.run_id,
             int(financial_rows),
             state.loaded_rows,

@@ -116,7 +116,7 @@ def _make_id(url: str | None, source: str, time_published: str, title: str) -> s
     else:
         normalized_title = _normalize_title(title)
         key = f"{source.strip()}|{time_published.strip()}|{normalized_title}"
-    return hashlib.sha1(key.encode("utf-8")).hexdigest()
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
 def _parse_time_published(value: str) -> datetime | None:
@@ -306,8 +306,12 @@ def index_news(
                 title = _truncate_text(row.get("title") or "", MAX_TITLE_LEN)
                 summary = _truncate_text(row.get("summary") or "", MAX_SUMMARY_LEN)
                 lang = str(row.get("lang") or "unknown").strip().lower() or "unknown"
-                time_raw = str(row.get("time_published") or row.get("time_published_utc") or "").strip()
-                doc_id = _make_id(url=url or None, source=source, time_published=time_raw, title=title)
+                time_raw = str(
+                    row.get("time_published") or row.get("time_published_utc") or ""
+                ).strip()
+                doc_id = _make_id(
+                    url=url or None, source=source, time_published=time_raw, title=title
+                )
                 published_at = _parse_time_published(time_raw)
                 if since_dt or until_dt:
                     if published_at is None:
@@ -388,15 +392,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", default="config/conf.yaml")
     parser.add_argument("--collection", default=DEFAULT_COLLECTION)
-    parser.add_argument("--run-date", default=None, help="Filter MinIO keys by run_date=YYYY-MM-DD.")
+    parser.add_argument(
+        "--run-date", default=None, help="Filter MinIO keys by run_date=YYYY-MM-DD."
+    )
     parser.add_argument(
         "--symbol",
         action="append",
         default=[],
         help="Optional symbol filter. Can repeat: --symbol AAPL --symbol MSFT",
     )
-    parser.add_argument("--since", default="", help="Filter news time_published >= this timestamp/date.")
-    parser.add_argument("--until", default="", help="Filter news time_published < this timestamp/date.")
+    parser.add_argument(
+        "--since", default="", help="Filter news time_published >= this timestamp/date."
+    )
+    parser.add_argument(
+        "--until", default="", help="Filter news time_published < this timestamp/date."
+    )
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--prefix", default=DEFAULT_MINIO_PREFIX)
     parser.add_argument("--skip-indexes", action="store_true")

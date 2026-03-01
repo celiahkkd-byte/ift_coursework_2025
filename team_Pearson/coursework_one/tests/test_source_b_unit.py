@@ -219,7 +219,9 @@ def test_transform_source_b_features_missing_time_fallback_marks_inferred(monkey
         {
             "symbol": "AAPL",
             "month_end": "2026-02-28",
-            "feed": [{"title": "Strong profit", "summary": "Positive growth", "time_published": ""}],
+            "feed": [
+                {"title": "Strong profit", "summary": "Positive growth", "time_published": ""}
+            ],
         }
     ]
     out = source_b.transform_source_b_features(raw_payloads, ["AAPL"], "2026-02-14", "daily")
@@ -234,7 +236,9 @@ def test_transform_source_b_features_strict_time_drops_missing_time(monkeypatch)
         {
             "symbol": "AAPL",
             "month_end": "2026-02-28",
-            "feed": [{"title": "Strong profit", "summary": "Positive growth", "time_published": ""}],
+            "feed": [
+                {"title": "Strong profit", "summary": "Positive growth", "time_published": ""}
+            ],
         }
     ]
     out = source_b.transform_source_b_features(

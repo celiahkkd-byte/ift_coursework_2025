@@ -48,7 +48,8 @@ def _normalize_country_allowlist(country_allowlist: Optional[object]) -> List[st
         items = country_allowlist
     else:
         raise ValueError(
-            f"Invalid country_allowlist={country_allowlist!r}. Expected list or comma-separated string."
+            "Invalid country_allowlist="
+            f"{country_allowlist!r}. Expected list or comma-separated string."
         )
     out = []
     for country in items:

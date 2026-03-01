@@ -101,14 +101,16 @@ def _resolve_alpha_key(config: Optional[Dict[str, Any]]) -> str:
 
     api_cfg = (config or {}).get("api") or {}
     legacy_cfg = (config or {}).get("alpha_vantage") or {}
-    return _sanitize(os.getenv("ALPHA_VANTAGE_API_KEY")) or _sanitize(
-        os.getenv("ALPHA_VANTAGE_KEY")
-    ) or _sanitize(api_cfg.get("alpha_vantage_key") or legacy_cfg.get("api_key"))
+    return (
+        _sanitize(os.getenv("ALPHA_VANTAGE_API_KEY"))
+        or _sanitize(os.getenv("ALPHA_VANTAGE_KEY"))
+        or _sanitize(api_cfg.get("alpha_vantage_key") or legacy_cfg.get("api_key"))
+    )
 
 
 def _resolve_source_b_strict_time(config: Optional[Dict[str, Any]]) -> bool:
     """Resolve strict timestamp policy for Source B article rows."""
-    source_cfg = ((config or {}).get("source_b") or {})
+    source_cfg = (config or {}).get("source_b") or {}
     raw = source_cfg.get("strict_time", False)
     if isinstance(raw, bool):
         return raw

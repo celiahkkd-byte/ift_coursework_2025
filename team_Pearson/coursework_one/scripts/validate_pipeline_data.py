@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import argparse
 import math
+from datetime import date
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
 from modules.db import get_db_engine
+from modules.output.data_contract import ALLOWED_FREQUENCIES, ALLOWED_SOURCES
+
+DEFAULT_COVERAGE_FACTORS = {"sentiment_30d_avg", "article_count_30d"}
 
 
 def _normalize_date_column(frame: pd.DataFrame, column: str) -> pd.DataFrame:
@@ -33,6 +38,207 @@ def _load_latest_run_id() -> Optional[str]:
             )
         ).first()
     return str(row[0]) if row else None
+
+
+def _load_factor_observations() -> pd.DataFrame:
+    engine = get_db_engine()
+    with engine.connect() as conn:
+        df = pd.read_sql(
+            text(
+                """
+                SELECT
+                    symbol,
+                    observation_date,
+                    factor_name,
+                    factor_value,
+                    source,
+                    metric_frequency
+                FROM systematic_equity.factor_observations
+                """
+            ),
+            conn,
+        )
+    return _normalize_date_column(df, "observation_date")
+
+
+def _daily_return_null_quality(
+    factors: pd.DataFrame,
+) -> tuple[set[tuple[str, object]], int, int]:
+    """Return (expected_null_keys, expected_null_rows, unexpected_null_rows)."""
+    if factors.empty:
+        return set(), 0, 0
+
+    daily_ret = factors[factors["factor_name"] == "daily_return"][
+        ["symbol", "observation_date", "factor_value"]
+    ].copy()
+    if daily_ret.empty:
+        return set(), 0, 0
+
+    daily_ret_null = daily_ret[daily_ret["factor_value"].isna()].copy()
+    if daily_ret_null.empty:
+        return set(), 0, 0
+
+    close_df = factors[factors["factor_name"] == "adjusted_close_price"][
+        ["symbol", "observation_date", "factor_value"]
+    ].copy()
+    close_df["factor_value"] = pd.to_numeric(close_df["factor_value"], errors="coerce")
+    close_df = (
+        close_df.sort_values(["symbol", "observation_date"])
+        .drop_duplicates(subset=["symbol", "observation_date"], keep="last")
+        .rename(columns={"factor_value": "adjusted_close_price"})
+    )
+    close_df["prev_close"] = close_df.groupby("symbol")["adjusted_close_price"].shift(1)
+
+    merged = daily_ret_null.merge(
+        close_df[["symbol", "observation_date", "adjusted_close_price", "prev_close"]],
+        on=["symbol", "observation_date"],
+        how="left",
+    )
+    explainable = (
+        merged["adjusted_close_price"].isna()
+        | (merged["adjusted_close_price"] <= 0)
+        | merged["prev_close"].isna()
+        | (merged["prev_close"] <= 0)
+    )
+    expected_rows = merged[explainable][["symbol", "observation_date"]]
+    expected_null_keys = set(map(tuple, expected_rows.itertuples(index=False, name=None)))
+    expected_null_rows = int(explainable.sum())
+    unexpected_null_rows = int((~explainable).sum())
+    return expected_null_keys, expected_null_rows, unexpected_null_rows
+
+
+def _validate_common_quality(
+    factors: pd.DataFrame, daily_return_sanity_threshold: float
+) -> tuple[dict[str, int], dict[str, int]]:
+    if factors.empty:
+        return (
+            {
+                "checked_rows": 0,
+                "duplicate_key_rows": 0,
+                "missing_required_rows": 0,
+                "non_finite_value_rows": 0,
+                "invalid_frequency_rows": 0,
+                "invalid_source_rows": 0,
+                "unexpected_daily_return_null_rows": 0,
+                "news_sentiment_null_rows": 0,
+                "news_count_null_rows": 0,
+                "news_count_negative_rows": 0,
+                "sentiment_30d_null_rows": 0,
+            },
+            {"daily_return_extreme_rows": 0, "expected_daily_return_null_rows": 0},
+        )
+
+    key_cols = ["symbol", "observation_date", "factor_name"]
+    duplicate_key_rows = int(factors.duplicated(subset=key_cols, keep=False).sum())
+
+    symbol_blank = factors["symbol"].isna() | (factors["symbol"].astype(str).str.strip() == "")
+    factor_blank = factors["factor_name"].isna() | (
+        factors["factor_name"].astype(str).str.strip() == ""
+    )
+    value_null = factors["factor_value"].isna()
+    (
+        expected_null_keys,
+        expected_null_rows,
+        unexpected_null_rows,
+    ) = _daily_return_null_quality(factors)
+    daily_return_null = value_null & (factors["factor_name"] == "daily_return")
+    row_keys = list(zip(factors["symbol"], factors["observation_date"]))
+    explainable_daily_return_null = pd.Series(
+        [k in expected_null_keys for k in row_keys], index=factors.index
+    )
+    null_value_allowed = daily_return_null & explainable_daily_return_null
+    missing_required_rows = int(
+        (
+            symbol_blank
+            | factors["observation_date"].isna()
+            | factor_blank
+            | (value_null & ~null_value_allowed)
+        ).sum()
+    )
+
+    numeric_values = pd.to_numeric(factors["factor_value"], errors="coerce")
+    non_finite_mask = (~value_null) & (
+        numeric_values.isna() | (~np.isfinite(numeric_values.to_numpy()))
+    )
+    non_finite_value_rows = int(non_finite_mask.sum())
+
+    freq = factors["metric_frequency"].astype(str).str.strip().str.lower()
+    invalid_frequency_rows = int((~freq.isin(ALLOWED_FREQUENCIES)).sum())
+
+    src = factors["source"].astype(str).str.strip().str.lower()
+    invalid_source_rows = int((~src.isin(ALLOWED_SOURCES)).sum())
+
+    daily_ret = factors[factors["factor_name"] == "daily_return"].copy()
+    daily_ret["factor_value"] = pd.to_numeric(daily_ret["factor_value"], errors="coerce")
+    daily_return_extreme_rows = int(
+        daily_ret["factor_value"].abs().gt(daily_return_sanity_threshold).fillna(False).sum()
+    )
+    news_sentiment = factors[factors["factor_name"] == "news_sentiment_daily"].copy()
+    news_count = factors[factors["factor_name"] == "news_article_count_daily"].copy()
+    sentiment_30d = factors[factors["factor_name"] == "sentiment_30d_avg"].copy()
+
+    news_sentiment_null_rows = int(news_sentiment["factor_value"].isna().sum())
+    news_count_null_rows = int(news_count["factor_value"].isna().sum())
+    news_count["factor_value"] = pd.to_numeric(news_count["factor_value"], errors="coerce")
+    news_count_negative_rows = int(news_count["factor_value"].lt(0).fillna(False).sum())
+    sentiment_30d_null_rows = int(sentiment_30d["factor_value"].isna().sum())
+
+    hard_fail_counts = {
+        "checked_rows": int(len(factors)),
+        "duplicate_key_rows": duplicate_key_rows,
+        "missing_required_rows": missing_required_rows,
+        "non_finite_value_rows": non_finite_value_rows,
+        "invalid_frequency_rows": invalid_frequency_rows,
+        "invalid_source_rows": invalid_source_rows,
+        "unexpected_daily_return_null_rows": unexpected_null_rows,
+        "news_sentiment_null_rows": news_sentiment_null_rows,
+        "news_count_null_rows": news_count_null_rows,
+        "news_count_negative_rows": news_count_negative_rows,
+        "sentiment_30d_null_rows": sentiment_30d_null_rows,
+    }
+    warning_counts = {
+        "daily_return_extreme_rows": daily_return_extreme_rows,
+        "expected_daily_return_null_rows": expected_null_rows,
+    }
+    return hard_fail_counts, warning_counts
+
+
+def _validate_daily_symbol_coverage(
+    factors: pd.DataFrame,
+    start_date: date,
+    end_date: date,
+    coverage_factors: set[str],
+) -> dict[str, int]:
+    if factors.empty or not coverage_factors:
+        return {"coverage_expected_rows": 0, "coverage_missing_rows": 0}
+
+    f = factors[
+        factors["factor_name"].isin(coverage_factors) & factors["observation_date"].notna()
+    ][["symbol", "observation_date", "factor_name"]].copy()
+    if f.empty:
+        return {"coverage_expected_rows": 0, "coverage_missing_rows": 0}
+
+    symbols = sorted(set(f["symbol"].dropna().astype(str)))
+    if not symbols:
+        return {"coverage_expected_rows": 0, "coverage_missing_rows": 0}
+
+    full_dates = pd.date_range(start_date, end_date, freq="D").date
+    if len(full_dates) == 0:
+        return {"coverage_expected_rows": 0, "coverage_missing_rows": 0}
+
+    expected_rows = len(symbols) * len(full_dates) * len(coverage_factors)
+
+    grid = pd.MultiIndex.from_product(
+        [symbols, full_dates, sorted(coverage_factors)],
+        names=["symbol", "observation_date", "factor_name"],
+    )
+    observed = (
+        f.assign(symbol=f["symbol"].astype(str))
+        .drop_duplicates(subset=["symbol", "observation_date", "factor_name"], keep="last")
+        .set_index(["symbol", "observation_date", "factor_name"])
+    )
+    missing_rows = int(len(grid.difference(observed.index)))
+    return {"coverage_expected_rows": expected_rows, "coverage_missing_rows": missing_rows}
 
 
 def _validate_daily_return(tolerance: float) -> tuple[int, float]:
@@ -87,7 +293,8 @@ def _validate_daily_return(tolerance: float) -> tuple[int, float]:
         ]
         raise AssertionError(
             "daily_return check failed. max_abs_err="
-            f"{max_abs_err:.10f} > tolerance={tolerance}. worst_rows=\n{worst.to_string(index=False)}"
+            f"{max_abs_err:.10f} > tolerance={tolerance}. "
+            f"worst_rows=\n{worst.to_string(index=False)}"
         )
     return int(len(valid)), max_abs_err
 
@@ -178,11 +385,48 @@ def parse_args() -> argparse.Namespace:
         default=1e-6,
         help="Maximum accepted absolute error for recompute checks.",
     )
+    parser.add_argument(
+        "--daily-return-sanity-threshold",
+        type=float,
+        default=1.0,
+        help="Absolute threshold for daily_return sanity warnings (does not fail).",
+    )
+    parser.add_argument(
+        "--start-date",
+        type=str,
+        default=None,
+        help="Coverage check start date (YYYY-MM-DD). Use together with --end-date.",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        default=None,
+        help="Coverage check end date (YYYY-MM-DD). Use together with --start-date.",
+    )
+    parser.add_argument(
+        "--coverage-factors",
+        type=str,
+        default="sentiment_30d_avg,article_count_30d",
+        help="Comma-separated factors for optional daily coverage check.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    if (args.start_date is None) ^ (args.end_date is None):
+        raise ValueError("--start-date and --end-date must be provided together.")
+    start_date: date | None = None
+    end_date: date | None = None
+    if args.start_date and args.end_date:
+        start_date = pd.to_datetime(args.start_date, errors="raise").date()
+        end_date = pd.to_datetime(args.end_date, errors="raise").date()
+        if start_date > end_date:
+            raise ValueError("--start-date must be <= --end-date.")
+    coverage_factors = {
+        x.strip() for x in str(args.coverage_factors).split(",") if x.strip()
+    } or set(DEFAULT_COVERAGE_FACTORS)
+
     latest_run_id = _load_latest_run_id()
     print(f"latest_run_id={latest_run_id}")
 
@@ -191,6 +435,55 @@ def main() -> int:
 
     n_dte, err_dte = _validate_debt_to_equity(args.tolerance)
     print(f"debt_to_equity_checked_rows={n_dte} max_abs_err={err_dte:.10f}")
+
+    factors = _load_factor_observations()
+    hard_fail_counts, warning_counts = _validate_common_quality(
+        factors, daily_return_sanity_threshold=args.daily_return_sanity_threshold
+    )
+    print(
+        "common_quality_checked_rows="
+        f"{hard_fail_counts['checked_rows']} "
+        f"duplicate_key_rows={hard_fail_counts['duplicate_key_rows']} "
+        f"missing_required_rows={hard_fail_counts['missing_required_rows']} "
+        f"non_finite_value_rows={hard_fail_counts['non_finite_value_rows']} "
+        f"invalid_frequency_rows={hard_fail_counts['invalid_frequency_rows']} "
+        f"invalid_source_rows={hard_fail_counts['invalid_source_rows']} "
+        "unexpected_daily_return_null_rows="
+        f"{hard_fail_counts['unexpected_daily_return_null_rows']} "
+        f"news_sentiment_null_rows={hard_fail_counts['news_sentiment_null_rows']} "
+        f"news_count_null_rows={hard_fail_counts['news_count_null_rows']} "
+        f"news_count_negative_rows={hard_fail_counts['news_count_negative_rows']} "
+        f"sentiment_30d_null_rows={hard_fail_counts['sentiment_30d_null_rows']}"
+    )
+    print(
+        "warning_daily_return_extreme_rows="
+        f"{warning_counts['daily_return_extreme_rows']} "
+        "expected_daily_return_null_rows="
+        f"{warning_counts['expected_daily_return_null_rows']} "
+        f"threshold={args.daily_return_sanity_threshold:.6f}"
+    )
+
+    hard_fail_total = sum(v for k, v in hard_fail_counts.items() if k != "checked_rows")
+    if hard_fail_total > 0:
+        raise AssertionError(
+            "common quality checks failed: " f"{hard_fail_counts}, warnings={warning_counts}"
+        )
+
+    if start_date and end_date:
+        coverage = _validate_daily_symbol_coverage(
+            factors,
+            start_date=start_date,
+            end_date=end_date,
+            coverage_factors=coverage_factors,
+        )
+        print(
+            f"coverage_date_range={start_date.isoformat()}..{end_date.isoformat()} "
+            f"coverage_factors={','.join(sorted(coverage_factors))} "
+            f"coverage_expected_rows={coverage['coverage_expected_rows']} "
+            f"coverage_missing_rows={coverage['coverage_missing_rows']}"
+        )
+        if coverage["coverage_missing_rows"] > 0:
+            raise AssertionError(f"coverage check failed: {coverage}")
 
     print("validation_status=PASS")
     return 0

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-_ALLOWED_FREQUENCIES = {"daily", "weekly", "monthly", "quarterly", "annual", "unknown"}
+from .data_contract import ALLOWED_FREQUENCIES
 
 
 def _is_missing_required(r: Dict[str, Any]) -> bool:
@@ -20,7 +20,7 @@ def _is_missing_required(r: Dict[str, Any]) -> bool:
 def _is_invalid_frequency(freq: Optional[str]) -> bool:
     if freq is None:
         return True
-    return str(freq).strip().lower() not in _ALLOWED_FREQUENCIES
+    return str(freq).strip().lower() not in ALLOWED_FREQUENCIES
 
 
 def _is_non_finite_number(x: Any) -> bool:

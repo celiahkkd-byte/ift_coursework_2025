@@ -234,7 +234,9 @@ def test_compute_final_factor_records_pb_ratio_uses_dynamic_q99_for_large_monthl
         )
 
     out = factors.compute_final_factor_records(atomic, run_date=obs_date, backfill_years=1)
-    pb_rows = [r for r in out if r["factor_name"] == "pb_ratio" and r["observation_date"] == obs_date]
+    pb_rows = [
+        r for r in out if r["factor_name"] == "pb_ratio" and r["observation_date"] == obs_date
+    ]
     assert len(pb_rows) == 50
     outlier = [r for r in pb_rows if r["symbol"] == "S049"][0]
     # Dynamic q99 should cap the outlier below its raw value (1000),
@@ -275,7 +277,9 @@ def test_compute_final_factor_records_pb_ratio_falls_back_to_100_cap_for_small_c
         )
 
     out = factors.compute_final_factor_records(atomic, run_date=obs_date, backfill_years=1)
-    pb_rows = [r for r in out if r["factor_name"] == "pb_ratio" and r["observation_date"] == obs_date]
+    pb_rows = [
+        r for r in out if r["factor_name"] == "pb_ratio" and r["observation_date"] == obs_date
+    ]
     assert len(pb_rows) == 10
     outlier = [r for r in pb_rows if r["symbol"] == "T009"][0]
     assert outlier["factor_value"] == 100.0
@@ -311,7 +315,9 @@ def test_financial_staleness_logs_soft_and_hard_events(caplog):
         out = factors.compute_final_factor_records(atomic, run_date="2026-12-31", backfill_years=1)
 
     # total_shareholder_equity expired => pb_ratio should be dropped for this date.
-    pb_rows = [r for r in out if r["factor_name"] == "pb_ratio" and r["observation_date"] == "2026-12-31"]
+    pb_rows = [
+        r for r in out if r["factor_name"] == "pb_ratio" and r["observation_date"] == "2026-12-31"
+    ]
     assert pb_rows == []
 
     joined = "\n".join(caplog.messages)

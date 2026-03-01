@@ -331,7 +331,9 @@ def test_resolve_alpha_key_from_config_when_env_missing(monkeypatch):
 
 def test_resolve_alpha_key_with_source_env_overrides_conf(monkeypatch):
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "env_key")
-    key, source = source_a._resolve_alpha_key_with_source({"api": {"alpha_vantage_key": "conf_key"}})
+    key, source = source_a._resolve_alpha_key_with_source(
+        {"api": {"alpha_vantage_key": "conf_key"}}
+    )
     assert key == "env_key"
     assert source == "env"
 
@@ -339,7 +341,9 @@ def test_resolve_alpha_key_with_source_env_overrides_conf(monkeypatch):
 def test_resolve_alpha_key_with_source_conf_when_env_placeholder(monkeypatch):
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "YOUR_KEY")
     monkeypatch.delenv("ALPHA_VANTAGE_KEY", raising=False)
-    key, source = source_a._resolve_alpha_key_with_source({"alpha_vantage": {"api_key": "conf_key"}})
+    key, source = source_a._resolve_alpha_key_with_source(
+        {"alpha_vantage": {"api_key": "conf_key"}}
+    )
     assert key == "conf_key"
     assert source == "conf"
 

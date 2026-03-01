@@ -5,7 +5,17 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -70,7 +80,9 @@ class FinancialObservation(Base):
 class PipelineRun(Base):
     __tablename__ = "pipeline_runs"
     __table_args__ = (
-        CheckConstraint("status IN ('running', 'success', 'failed')", name="ck_pipeline_runs_status"),
+        CheckConstraint(
+            "status IN ('running', 'success', 'failed')", name="ck_pipeline_runs_status"
+        ),
         Index("idx_pipeline_runs_run_date", "run_date"),
         Index("idx_pipeline_runs_status", "status"),
         {"schema": "systematic_equity"},
@@ -91,4 +103,3 @@ class PipelineRun(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-

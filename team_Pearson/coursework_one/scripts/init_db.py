@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -55,14 +55,14 @@ def run_sql_init(container: str, db_user: str, db_name: str, init_sql_path: Path
         "-d",
         db_name,
     ]
-    subprocess.run(cmd, input=sql_bytes, check=True)
+    subprocess.run(cmd, input=sql_bytes, check=True)  # nosec B603
 
 
 def run_seed(sqlite_path: str | None) -> None:
     cmd = [sys.executable, "scripts/seed_universe_from_sqlite.py"]
     if sqlite_path:
         cmd.extend(["--sqlite-path", sqlite_path])
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True)  # nosec B603
 
 
 def main() -> int:

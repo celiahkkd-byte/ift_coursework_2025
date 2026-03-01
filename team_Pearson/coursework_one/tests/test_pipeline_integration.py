@@ -1,7 +1,8 @@
 import os
 
-import Main
 import pytest
+
+import Main
 from modules.output.normalize import normalize_records
 from modules.output.quality import run_quality_checks
 

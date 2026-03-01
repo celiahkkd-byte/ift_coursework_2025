@@ -28,22 +28,21 @@ def _find_unique_constraint_name(table, expected_cols: set[str], fallback: str) 
 def _count_existing_rows(
     conn: Any,
     *,
-    schema: str,
-    table_name: str,
+    table: Any,
     key_columns: tuple[str, ...],
     records: List[Dict[str, Any]],
 ) -> int:
     """Count existing rows by unique key before upsert (for observability only)."""
     if not records:
         return 0
-    from sqlalchemy import text  # type: ignore
+    from sqlalchemy import and_, bindparam, select  # type: ignore
 
-    where = " AND ".join([f"{col} = :{col}" for col in key_columns])
-    sql = text(f"SELECT 1 FROM {schema}.{table_name} WHERE {where} LIMIT 1")
+    where_terms = [table.c[col] == bindparam(col) for col in key_columns]
+    stmt = select(table.c[key_columns[0]]).where(and_(*where_terms)).limit(1)
     count = 0
     for rec in records:
         params = {k: rec.get(k) for k in key_columns}
-        row = conn.execute(sql, params).first()
+        row = conn.execute(stmt, params).first()
         if row is not None:
             count += 1
     return count
@@ -64,6 +63,7 @@ _FINANCIAL_CONSTRAINT_UNIQ = _find_unique_constraint_name(
     expected_cols={"symbol", "report_date", "metric_name"},
     fallback="uniq_financial_observation",
 )
+
 
 def _coerce_finite_float_or_none(value: Any) -> float | None:
     """Convert numeric-like value to finite float, otherwise None."""
@@ -162,7 +162,12 @@ def load_curated(
         if df.empty:
             if stats_out is not None:
                 stats_out.update(
-                    {"attempted": attempted_count, "inserted": 0, "updated": 0, "invalid": attempted_count}
+                    {
+                        "attempted": attempted_count,
+                        "inserted": 0,
+                        "updated": 0,
+                        "invalid": attempted_count,
+                    }
                 )
             return 0
         df["observation_date"] = obs[obs.notna()].dt.date.values
@@ -202,8 +207,7 @@ def load_curated(
         if stats_out is not None:
             existing_count = _count_existing_rows(
                 conn,
-                schema=schema,
-                table_name=table_name,
+                table=table,
                 key_columns=("symbol", "observation_date", "factor_name"),
                 records=records_out,
             )
@@ -280,7 +284,12 @@ def load_financial_observations(
     if df.empty:
         if stats_out is not None:
             stats_out.update(
-                {"attempted": attempted_count, "inserted": 0, "updated": 0, "invalid": attempted_count}
+                {
+                    "attempted": attempted_count,
+                    "inserted": 0,
+                    "updated": 0,
+                    "invalid": attempted_count,
+                }
             )
         return 0
     df["report_date"] = report[report.notna()].dt.date.values
@@ -319,8 +328,7 @@ def load_financial_observations(
         if stats_out is not None:
             existing_count = _count_existing_rows(
                 conn,
-                schema=schema,
-                table_name=table_name,
+                table=table,
                 key_columns=("symbol", "report_date", "metric_name"),
                 records=records_out,
             )
