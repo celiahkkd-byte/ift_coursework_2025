@@ -8,19 +8,23 @@ to MinIO, and returns records aligned to the pipeline's curated schema.
 
 import json
 import logging
+import math
 import os
 import re
 import time
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.parse import urlparse
 
 import pandas as pd
+import requests
 import yaml
 
+from .symbol_filter import filter_symbols
+
 logger = logging.getLogger(__name__)
+ALPHA_VANTAGE_BASE_URL = "https://www.alphavantage.co/query"
 
 
 def _json_default(obj: Any) -> Any:
@@ -77,17 +81,28 @@ def _download_price_history_alpha_vantage(
 ):
     """Download adjusted daily prices from Alpha Vantage."""
     _ = years_back  # endpoint returns full adjusted history; trimmed downstream by run_date
-    base_url = "https://www.alphavantage.co/query"
-    query = urlencode(
-        {
-            "function": "TIME_SERIES_DAILY_ADJUSTED",
-            "symbol": symbol,
-            "outputsize": "full",
-            "apikey": api_key,
-        }
-    )
-    with urlopen(f"{base_url}?{query}", timeout=timeout_seconds) as resp:
-        payload = json.loads(resp.read().decode("utf-8"))
+    parsed = urlparse(ALPHA_VANTAGE_BASE_URL)
+    if parsed.scheme != "https" or parsed.netloc != "www.alphavantage.co":
+        raise RuntimeError("Invalid Alpha Vantage base URL configuration.")
+
+    params = {
+        "function": "TIME_SERIES_DAILY_ADJUSTED",
+        "symbol": symbol,
+        "outputsize": "full",
+        "apikey": api_key,
+    }
+    try:
+        response = requests.get(
+            ALPHA_VANTAGE_BASE_URL,
+            params=params,
+            timeout=(5, timeout_seconds),
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Alpha Vantage request failed for {symbol}: {exc}") from exc
+    except ValueError as exc:
+        raise RuntimeError(f"Alpha Vantage invalid JSON for {symbol}: {exc}") from exc
 
     if "Error Message" in payload:
         raise RuntimeError(payload["Error Message"])
@@ -129,6 +144,121 @@ def _extract_total_debt(ticker: Any) -> Optional[float]:
     except Exception:  # pragma: no cover - upstream schema dependent
         return None
     return None
+
+
+def _to_float_or_none(value: Any) -> Optional[float]:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    if out != out or out in (float("inf"), float("-inf")):
+        return None
+    return out
+
+
+def _download_overview_alpha_vantage(symbol: str, api_key: str) -> Dict[str, Any]:
+    """Fetch Alpha Vantage OVERVIEW payload for fundamental snapshot fields."""
+    params = {
+        "function": "OVERVIEW",
+        "symbol": symbol,
+        "apikey": api_key,
+    }
+    response = requests.get(ALPHA_VANTAGE_BASE_URL, params=params, timeout=(5, 30))
+    response.raise_for_status()
+    payload = response.json()
+    if "Error Message" in payload:
+        raise RuntimeError(payload["Error Message"])
+    if "Note" in payload:
+        raise RuntimeError(payload["Note"])
+    if not isinstance(payload, dict):
+        raise RuntimeError("Alpha Vantage OVERVIEW returned invalid payload")
+    return payload
+
+
+def _extract_fundamentals_from_yfinance_ticker(ticker: Any) -> Dict[str, Any]:
+    """Extract fundamental snapshot fields from yfinance ticker object."""
+    info = {}
+    try:
+        info = ticker.info or {}
+    except Exception:
+        info = {}
+
+    total_debt = _extract_total_debt(ticker)
+    if total_debt is None:
+        total_debt = _to_float_or_none(info.get("totalDebt"))
+
+    return {
+        "total_debt": total_debt,
+        "book_value": _to_float_or_none(info.get("bookValue")),
+        "shares_outstanding": _to_float_or_none(info.get("sharesOutstanding")),
+        "enterprise_ebitda": _to_float_or_none(info.get("ebitda")),
+        "enterprise_revenue": _to_float_or_none(info.get("totalRevenue")),
+        "report_date": str(info.get("mostRecentQuarter") or "").strip()[:10] or None,
+        "currency": str(info.get("currency") or "").strip().upper() or None,
+        "metric_definition": "provider_reported",
+    }
+
+
+def _extract_fundamentals(
+    symbol: str,
+    ticker: Any,
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Extract fundamentals with unified provider order: Alpha Vantage -> yfinance fallback."""
+    out: Dict[str, Any] = {
+        "total_debt": None,
+        "book_value": None,
+        "shares_outstanding": None,
+        "enterprise_ebitda": None,
+        "enterprise_revenue": None,
+        "report_date": None,
+        "currency": None,
+        "metric_definition": "provider_reported",
+    }
+
+    # 1) Alpha Vantage first
+    api_key = _resolve_alpha_key(config)
+    if api_key:
+        try:
+            overview = _download_overview_alpha_vantage(symbol, api_key)
+            out["total_debt"] = _to_float_or_none(overview.get("TotalDebt"))
+            out["book_value"] = _to_float_or_none(overview.get("BookValue"))
+            out["shares_outstanding"] = _to_float_or_none(overview.get("SharesOutstanding"))
+            out["enterprise_ebitda"] = _to_float_or_none(overview.get("EBITDA"))
+            out["enterprise_revenue"] = _to_float_or_none(overview.get("RevenueTTM"))
+            out["report_date"] = str(overview.get("LatestQuarter") or "").strip()[:10] or None
+            out["currency"] = str(overview.get("Currency") or "").strip().upper() or None
+        except Exception:
+            pass
+
+    # 2) yfinance fallback for missing fields only
+    if any(
+        out.get(k) is None
+        for k in (
+            "total_debt",
+            "book_value",
+            "shares_outstanding",
+            "enterprise_ebitda",
+            "enterprise_revenue",
+            "report_date",
+            "currency",
+        )
+    ):
+        yf_ticker = ticker
+        if yf_ticker is None:
+            try:
+                import yfinance as yf
+
+                yf_ticker = yf.Ticker(symbol)
+            except Exception:
+                yf_ticker = None
+        if yf_ticker is not None:
+            yf_vals = _extract_fundamentals_from_yfinance_ticker(yf_ticker)
+            for key in out:
+                if out[key] is None:
+                    out[key] = yf_vals.get(key)
+
+    return out
 
 
 def _minio_config(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -276,19 +406,34 @@ def _build_records_from_history(
     source_label: str = "source_a",
 ) -> List[Dict[str, Any]]:
     records: List[Dict[str, Any]] = []
+    prev_close: Optional[float] = None
 
     for idx, row in history.iterrows():
         observation_date = idx.date().isoformat() if hasattr(idx, "date") else str(idx)[:10]
 
         close = row.get("Close")
         dividends = row.get("Dividends")
+        close_v = _to_float_or_none(close)
+        daily_return = None
+        if close_v is not None and close_v > 0 and prev_close is not None and prev_close > 0:
+            daily_return = math.log(close_v / prev_close)
 
         records.append(
             {
                 "symbol": symbol,
                 "observation_date": observation_date,
                 "factor_name": "adjusted_close_price",
-                "value": None if close is None else float(close),
+                "value": close_v,
+                "source": source_label,
+                "frequency": frequency,
+            }
+        )
+        records.append(
+            {
+                "symbol": symbol,
+                "observation_date": observation_date,
+                "factor_name": "daily_return",
+                "value": daily_return,
                 "source": source_label,
                 "frequency": frequency,
             }
@@ -304,6 +449,9 @@ def _build_records_from_history(
             }
         )
 
+        if close_v is not None and close_v > 0:
+            prev_close = close_v
+
     records.append(
         {
             "symbol": symbol,
@@ -312,10 +460,52 @@ def _build_records_from_history(
             "value": total_debt,
             "source": source_label,
             "frequency": frequency,
+            "source_report_date": run_date,
+            "period_type": "quarterly",
+            "currency": "UNKNOWN",
+            "metric_definition": "provider_reported",
         }
     )
 
     return records
+
+
+def _build_fundamental_records(
+    symbol: str,
+    run_date: str,
+    frequency: str,
+    source_label: str,
+    fundamentals: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Build atomic fundamental factor records at run_date snapshot."""
+    field_map = {
+        "book_value": ("book_value", "quarterly"),
+        "shares_outstanding": ("shares_outstanding", "quarterly"),
+        "enterprise_ebitda": ("enterprise_ebitda", "ttm"),
+        "enterprise_revenue": ("enterprise_revenue", "ttm"),
+    }
+    out: List[Dict[str, Any]] = []
+    report_date = str(fundamentals.get("report_date") or run_date)
+    currency = str(fundamentals.get("currency") or "UNKNOWN").strip().upper() or "UNKNOWN"
+    metric_definition = str(
+        fundamentals.get("metric_definition") or "provider_reported"
+    ).strip().lower()
+    for key, (factor_name, period_type) in field_map.items():
+        out.append(
+            {
+                "symbol": symbol,
+                "observation_date": run_date,
+                "factor_name": factor_name,
+                "value": fundamentals.get(key),
+                "source": source_label,
+                "frequency": frequency,
+                "source_report_date": report_date,
+                "period_type": period_type,
+                "currency": currency,
+                "metric_definition": metric_definition,
+            }
+        )
+    return out
 
 
 def _resolve_alpha_key(config: Dict[str, Any]) -> str:
@@ -458,7 +648,13 @@ def extract_source_a(
         ]
 
     cfg = config or load_config("config/conf.yaml")
-    target_symbols = list(symbols or [])
+    target_symbols = filter_symbols(
+        symbols=list(symbols or []),
+        config=cfg,
+        section=None,
+        default_skip_suffix=True,
+        default_regex=r"^[A-Z0-9]+$",
+    )
     if not target_symbols:
         return []
     source_cfg = cfg.get("source_a") or {}
@@ -478,19 +674,26 @@ def extract_source_a(
 
             if payload:
                 history = _history_from_payload(payload)
-                total_debt = payload.get("total_debt")
+                fundamentals = payload.get("fundamentals") or {}
+                total_debt = fundamentals.get("total_debt", payload.get("total_debt"))
                 provider_source = str(payload.get("source_used") or "cache_replay")
             else:
                 provider_source, ticker, history = _download_with_provider(
                     symbol, backfill_years, cfg, provider_order=provider_order
                 )
-                total_debt = _extract_total_debt(ticker)
+                fundamentals = _extract_fundamentals(
+                    symbol=symbol,
+                    ticker=ticker,
+                    config=cfg,
+                )
+                total_debt = fundamentals.get("total_debt")
                 payload = {
                     "symbol": symbol,
                     "run_date": run_date,
                     "rows": int(len(history)),
                     "history": history.reset_index().to_dict(orient="records"),
                     "total_debt": total_debt,
+                    "fundamentals": fundamentals,
                     "source_used": provider_source,
                 }
                 _save_raw_to_minio(cfg, symbol, run_date, payload)
@@ -511,6 +714,15 @@ def extract_source_a(
                     history=history,
                     frequency=frequency,
                     source_label=provider_source,
+                )
+            )
+            symbol_records.extend(
+                _build_fundamental_records(
+                    symbol=symbol,
+                    run_date=run_date,
+                    frequency=frequency,
+                    source_label=provider_source,
+                    fundamentals=fundamentals,
                 )
             )
             records.extend(symbol_records)

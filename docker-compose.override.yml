@@ -1,0 +1,5 @@
+services:
+  pgadmin:
+    image: dpage/pgadmin4:8
+    volumes:
+      - ./pgadmin-data:/var/lib/pgadmin

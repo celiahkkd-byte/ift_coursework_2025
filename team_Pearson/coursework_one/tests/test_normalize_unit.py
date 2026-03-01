@@ -1,4 +1,4 @@
-from modules.output.normalize import normalize_records
+from modules.output.normalize import normalize_financial_records, normalize_records
 
 
 def test_normalize_from_alternative_keys_and_type_cast():
@@ -57,3 +57,29 @@ def test_normalize_drops_invalid_observation_date():
     out = normalize_records(raw)
     assert len(out) == 1
     assert out[0]["symbol"] == "SYM1"
+
+
+def test_normalize_financial_records_maps_semantic_fields():
+    raw = [
+        {
+            "symbol": "AAPL",
+            "observation_date": "2026-02-14",
+            "factor_name": "enterprise_revenue",
+            "value": "123.4",
+            "source": "alpha_vantage",
+            "period_type": "ttm",
+            "currency": "usd",
+            "source_report_date": "2025-12-31",
+            "metric_definition": "provider_reported",
+        }
+    ]
+    out = normalize_financial_records(raw)
+    assert len(out) == 1
+    row = out[0]
+    assert row["symbol"] == "AAPL"
+    assert row["metric_name"] == "enterprise_revenue"
+    assert row["metric_value"] == 123.4
+    assert row["report_date"] == "2025-12-31"
+    assert row["as_of"] == "2026-02-14"
+    assert row["period_type"] == "ttm"
+    assert row["currency"] == "USD"

@@ -1,19 +1,18 @@
-import argparse
 import json
 import os
 import sys
+import traceback
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from modules.utils.args_parser import ALLOWED_FREQUENCIES, build_parser
+
 try:
     import yaml
 except ModuleNotFoundError:  # pragma: no cover
     yaml = None
-
-
-ALLOWED_FREQUENCIES = {"daily", "weekly", "monthly", "quarterly", "annual"}
 
 
 @dataclass
@@ -30,6 +29,15 @@ class RunLog:
     status: str
     error: str = ""
     notes: str = ""
+
+
+FINANCIAL_ATOMIC_FACTORS = {
+    "total_debt",
+    "book_value",
+    "shares_outstanding",
+    "enterprise_ebitda",
+    "enterprise_revenue",
+}
 
 
 def utc_now_iso() -> str:
@@ -171,44 +179,30 @@ def summarize_provider_usage(records: List[Dict[str, Any]]) -> Dict[str, int]:
     return counts
 
 
+def split_atomic_financial_records(
+    records: List[Dict[str, Any]],
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Split raw records into financial atomic rows and remaining curated rows."""
+    financial: List[Dict[str, Any]] = []
+    remaining: List[Dict[str, Any]] = []
+    for rec in records:
+        factor_name = str(rec.get("factor_name") or "").strip().lower()
+        if factor_name in FINANCIAL_ATOMIC_FACTORS and rec.get("source") != "factor_transform":
+            financial.append(rec)
+        else:
+            remaining.append(rec)
+    return financial, remaining
+
+
 def scheduling_stub(frequency: str) -> str:
     if frequency not in ALLOWED_FREQUENCIES:
         raise ValueError(f"Unsupported frequency: {frequency}")
     return f"Scheduling stub configured for: {frequency}"
 
 
-def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="CW1 pipeline skeleton (Team Pearson).")
-    p.add_argument(
-        "--config",
-        default="config/conf.yaml",
-        help="Path to YAML config relative to coursework_one/",
-    )
-    p.add_argument("--run-date", required=True, help="Run date in YYYY-MM-DD.")
-    p.add_argument("--frequency", required=True, choices=sorted(ALLOWED_FREQUENCIES))
-    p.add_argument(
-        "--backfill-years",
-        type=int,
-        default=None,
-        help="How many years of history to fetch (default from config).",
-    )
-    p.add_argument(
-        "--company-limit",
-        type=int,
-        default=None,
-        help="Limit companies for debugging (default from config).",
-    )
-    p.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Run pipeline without loading to storage (still runs transforms/quality).",
-    )
-    p.add_argument(
-        "--enabled-extractors",
-        default=None,
-        help="Comma-separated extractors to run, e.g. source_a,source_b (default from config).",
-    )
-    return p.parse_args()
+def parse_args():
+    """Parse command-line arguments."""
+    return build_parser().parse_args()
 
 
 def resolve_paths(base_dir: str, config_path: str) -> str:
@@ -230,9 +224,7 @@ def main() -> int:
     configured_extractors = pipeline_cfg.get("enabled_extractors", ["source_a"])
 
     if args.enabled_extractors:
-        enabled_extractors = [
-            x.strip().lower() for x in args.enabled_extractors.split(",") if x.strip()
-        ]
+        enabled_extractors = args.enabled_extractors
     elif isinstance(configured_extractors, list):
         enabled_extractors = [
             str(x).strip().lower() for x in configured_extractors if str(x).strip()
@@ -253,6 +245,7 @@ def main() -> int:
 
     run_id = str(uuid.uuid4())
     start = utc_now_iso()
+    error_traceback = ""
 
     stages_ok = 0
     stages_failed = 0
@@ -273,12 +266,38 @@ def main() -> int:
     loaded_rows = 0
     quality_report: Optional[Dict[str, Any]] = None
     provider_usage: Dict[str, int] = {}
+    enabled_extractors_text = ",".join(enabled_extractors)
+
+    # Primary audit sink: PostgreSQL systematic_equity.pipeline_runs
+    # Secondary audit sink: local JSONL (kept for developer convenience).
+    try:
+        from modules.output.audit import write_pipeline_run_start
+
+        write_pipeline_run_start(
+            run_id=run_id,
+            run_date=args.run_date,
+            started_at=start,
+            frequency=args.frequency,
+            backfill_years=int(backfill_years),
+            company_limit=int(company_limit),
+            enabled_extractors=enabled_extractors_text,
+            notes=notes,
+        )
+    except Exception as audit_exc:
+        print(f"[run_id={run_id}] audit_start_warning: {audit_exc!r}", file=sys.stderr)
 
     if status == "success":
         try:
             # Lazy imports so unit tests can import Main without DB drivers installed.
             from modules.db.universe import get_company_universe
-            from modules.output import load_curated, normalize_records, run_quality_checks
+            from modules.output import (
+                load_curated,
+                load_financial_observations,
+                normalize_financial_records,
+                normalize_records,
+                run_quality_checks,
+            )
+            from modules.transform import build_and_load_final_factors
 
             universe_cfg = cfg.get("universe") or {}
             country_allowlist = universe_cfg.get("country_allowlist")
@@ -298,13 +317,31 @@ def main() -> int:
                 notes = f"{notes}; provider_usage={json.dumps(provider_usage, sort_keys=True)}"
             stages_ok += 1
 
-            curated = normalize_records(raw)
+            financial_atomic_raw, curated_raw = split_atomic_financial_records(raw)
+
+            curated = normalize_records(curated_raw)
             stages_ok += 1
 
             quality_report = run_quality_checks(curated)
             stages_ok += 1
 
             loaded_rows = load_curated(curated, dry_run=args.dry_run)
+            stages_ok += 1
+
+            financial_normalized = normalize_financial_records(financial_atomic_raw)
+            financial_rows = load_financial_observations(financial_normalized, dry_run=args.dry_run)
+            loaded_rows += int(financial_rows)
+            stages_ok += 1
+
+            final_factor_rows = 0
+            if os.getenv("CW1_TEST_MODE") != "1":
+                final_factor_rows = build_and_load_final_factors(
+                    run_date=args.run_date,
+                    backfill_years=backfill_years,
+                    symbols=universe,
+                    dry_run=args.dry_run,
+                )
+            loaded_rows += int(final_factor_rows)
             stages_ok += 1
 
             fallback_count = provider_usage.get("yfinance", 0)
@@ -318,6 +355,7 @@ def main() -> int:
         except Exception as e:
             status = "failed"
             err = f"pipeline_error: {repr(e)}"
+            error_traceback = traceback.format_exc()
             stages_failed += 1
             print(f"[run_id={run_id}] ERROR: {err}", file=sys.stderr)
 
@@ -342,6 +380,27 @@ def main() -> int:
         notes=notes,
     )
     write_jsonl(run_log_path, asdict(record))
+
+    try:
+        from modules.output.audit import write_pipeline_run_finish
+
+        write_pipeline_run_finish(
+            run_id=run_id,
+            run_date=args.run_date,
+            finished_at=end,
+            status=status,
+            rows_written=int(loaded_rows),
+            error_message=err,
+            error_traceback=error_traceback,
+            notes=notes,
+            frequency=args.frequency,
+            backfill_years=int(backfill_years),
+            company_limit=int(company_limit),
+            enabled_extractors=enabled_extractors_text,
+        )
+    except Exception as audit_exc:
+        print(f"[run_id={run_id}] audit_finish_warning: {audit_exc!r}", file=sys.stderr)
+
     print(f"[run_id={run_id}] run_log_written_to={run_log_path}")
 
     return 0 if status == "success" else 1

@@ -27,6 +27,11 @@ source_a:
   enable_yfinance_fallback: true
   use_cache: true
 
+# Shared symbol filtering policy (applies to all sources unless overridden)
+symbol_filter:
+  skip_suffix_symbols: true
+  symbol_regex_allow: "^[A-Z0-9]+$"
+
 # Provider-aware routing
 routing:
   av_only_if_regex: "^[A-Z0-9]+$"
@@ -63,4 +68,4 @@ database:
 mongo:
   host: localhost
   port: 27019
-  database: admin
+  database: ift_cw

@@ -1,5 +1,6 @@
 import importlib
 import json
+import math
 
 import pandas as pd
 
@@ -14,6 +15,7 @@ class _FakeTickerWithDebt:
 class _FakeTickerNoDebt:
     def __init__(self):
         self.quarterly_balance_sheet = pd.DataFrame()
+        self.info = {}
 
 
 def test_extract_source_a_test_mode(monkeypatch):
@@ -36,6 +38,58 @@ def test_extract_total_debt_missing_returns_none():
     assert source_a._extract_total_debt(_FakeTickerNoDebt()) is None
 
 
+def test_extract_fundamentals_from_yfinance_ticker():
+    class _T:
+        def __init__(self):
+            self.quarterly_balance_sheet = pd.DataFrame({"2025Q4": [123.0]}, index=["Total Debt"])
+            self.info = {
+                "bookValue": 20.5,
+                "sharesOutstanding": 1000000,
+                "ebitda": 5000000,
+                "totalRevenue": 15000000,
+            }
+
+    out = source_a._extract_fundamentals_from_yfinance_ticker(_T())
+    assert out["total_debt"] == 123.0
+    assert out["book_value"] == 20.5
+    assert out["shares_outstanding"] == 1000000.0
+    assert out["enterprise_ebitda"] == 5000000.0
+    assert out["enterprise_revenue"] == 15000000.0
+
+
+def test_extract_fundamentals_unified_order_av_then_yf_fallback(monkeypatch):
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "k")
+
+    def _av_overview(symbol, api_key):  # noqa: ARG001
+        return {
+            "TotalDebt": "",
+            "BookValue": "10.0",
+            "SharesOutstanding": "",
+            "EBITDA": "200.0",
+            "RevenueTTM": "",
+        }
+
+    monkeypatch.setattr(source_a, "_download_overview_alpha_vantage", _av_overview)
+
+    class _Ticker:
+        def __init__(self):
+            self.quarterly_balance_sheet = pd.DataFrame()
+            self.info = {
+                "totalDebt": 300.0,
+                "sharesOutstanding": 12345,
+                "totalRevenue": 900.0,
+            }
+
+    out = source_a._extract_fundamentals(symbol="AAPL", ticker=_Ticker(), config={})
+    # AV values kept when present
+    assert out["book_value"] == 10.0
+    assert out["enterprise_ebitda"] == 200.0
+    # Missing AV values filled by yfinance
+    assert out["total_debt"] == 300.0
+    assert out["shares_outstanding"] == 12345.0
+    assert out["enterprise_revenue"] == 900.0
+
+
 def test_build_records_from_history_shape():
     idx = pd.to_datetime(["2026-02-13", "2026-02-14"])
     history = pd.DataFrame(
@@ -52,9 +106,33 @@ def test_build_records_from_history_shape():
         frequency="daily",
         total_debt=500.0,
     )
-    assert len(out) == 5
+    assert len(out) == 7
     names = {r["factor_name"] for r in out}
-    assert {"adjusted_close_price", "dividend_per_share", "total_debt"}.issubset(names)
+    assert {"adjusted_close_price", "daily_return", "dividend_per_share", "total_debt"}.issubset(
+        names
+    )
+    dr = [r for r in out if r["factor_name"] == "daily_return"]
+    assert len(dr) == 2
+    assert dr[0]["value"] is None
+    assert abs(dr[1]["value"] - math.log(1.01)) < 1e-12
+
+
+def test_build_fundamental_records_shape():
+    out = source_a._build_fundamental_records(
+        symbol="AAPL",
+        run_date="2026-02-14",
+        frequency="daily",
+        source_label="alpha_vantage",
+        fundamentals={
+            "book_value": 10.0,
+            "shares_outstanding": 100.0,
+            "enterprise_ebitda": 30.0,
+            "enterprise_revenue": 200.0,
+        },
+    )
+    assert len(out) == 4
+    names = {r["factor_name"] for r in out}
+    assert {"book_value", "shares_outstanding", "enterprise_ebitda", "enterprise_revenue"} == names
 
 
 def test_extract_source_a_handles_symbol_failure(monkeypatch):

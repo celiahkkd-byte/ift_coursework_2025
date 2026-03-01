@@ -114,3 +114,55 @@ def normalize_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         )
 
     return normalized
+
+
+def normalize_financial_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Normalize atomic financial records for ``financial_observations``."""
+    normalized: List[Dict[str, Any]] = []
+
+    for rec in records:
+        symbol = rec.get("symbol")
+        metric_name = rec.get("metric_name") or rec.get("factor_name")
+        metric_name = str(metric_name).strip() if metric_name is not None else ""
+        if not metric_name:
+            continue
+
+        report_date = _to_iso_date(
+            rec.get("report_date") or rec.get("source_report_date") or rec.get("observation_date")
+        )
+        as_of = _to_iso_date(rec.get("as_of") or rec.get("observation_date"))
+        metric_value = _to_float_or_none(
+            rec.get("metric_value") if "metric_value" in rec else rec.get("value")
+        )
+
+        currency = str(rec.get("currency") or "unknown").strip().upper()
+        if not currency:
+            currency = "UNKNOWN"
+
+        period_type = str(
+            rec.get("period_type") or rec.get("metric_frequency") or rec.get("frequency") or "unknown"
+        ).strip().lower()
+        metric_definition = str(
+            rec.get("metric_definition") or rec.get("definition") or "provider_reported"
+        ).strip().lower()
+        source = rec.get("source", "unknown")
+
+        if report_date is None:
+            continue
+
+        normalized.append(
+            {
+                "symbol": symbol,
+                "report_date": report_date,
+                "metric_name": metric_name,
+                "metric_value": metric_value,
+                "currency": currency,
+                "period_type": period_type,
+                "source": source,
+                "as_of": as_of,
+                "metric_definition": metric_definition,
+                "run_id": rec.get("run_id"),
+            }
+        )
+
+    return normalized

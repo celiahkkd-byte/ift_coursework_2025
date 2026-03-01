@@ -1,13 +1,21 @@
 # Data Catalog
 
-> This document lists all core datasets used in the coursework project, including source, type, storage location, and description, to facilitate understanding and usage by team members.
+This catalog lists implemented datasets, owners, and storage locations.
 
 | Dataset Name | Type | Storage | Description | Owner / Role |
-|--------------|------|---------|------------|--------------|
-| company_static | Structured Table | PostgreSQL (systematic_equity.company_static) | Investable universe master table, contains symbol, name, sector, market cap, etc. | Role 5 |
-| raw_price_data | JSON / CSV | MinIO | Daily stock price and dividend data from external API (yfinance) | Role 6 |
-| raw_financials | Structured | PostgreSQL (internal tables) | Enterprise financial data (EBITDA, Revenue, Book Value, Debt, etc.) | Role 6 / 8 |
-| raw_news_sentiment | JSON | MinIO | Raw news text and sentiment scores from news APIs (Alpha Vantage / NewsAPI) | Role 7 |
-| factor_observations | Structured / Long Table | PostgreSQL (systematic_equity.factor_observations) | Final calculated factor values (Dividend Yield, EBITDA Margin, Debt/Equity, P/B, Sentiment) | Role 8 |
-| pipeline_runs | Structured | PostgreSQL (audit table) | Records ETL execution metadata including run_id, start/end time, status, error info | Role 8 |
-| TBD | Structured / Raw | TBD | Other auxiliary or temporary datasets, to be updated after development | TBD |
+| --- | --- | --- | --- | --- |
+| `company_static` | Structured table | PostgreSQL `systematic_equity.company_static` | Dynamic investable universe (symbols and metadata). | Role 5 |
+| `source_a_raw_pricing_fundamentals` | Raw JSON | MinIO `raw/source_a/pricing_fundamentals/...` | Source A raw payloads (Alpha Vantage primary, yfinance fallback). | Role 6 |
+| `source_b_raw_news` | Raw JSONL | MinIO `raw/source_b/news/run_date=.../year=.../month=.../symbol=...jsonl` | Source B raw article text payloads (deduplicated by URL or `title+time_published`). | Role 7 |
+| `financial_observations` | Structured long table | PostgreSQL `systematic_equity.financial_observations` | Atomic financial metrics with period semantics (`symbol/report_date/metric/value/currency/period_type`). | Role 8 |
+| `factor_observations` | Structured long table | PostgreSQL `systematic_equity.factor_observations` | Atomic and final factors in EAV format (`symbol/date/factor/value`). | Role 8 |
+| `pipeline_runs` | Structured audit table | PostgreSQL `systematic_equity.pipeline_runs` | Primary run-level audit trail (`running/success/failed`, context, row counts, errors). | Role 8 |
+| `pipeline_runs_jsonl` | JSONL log | Local file `logs/pipeline_runs.jsonl` | Secondary debug mirror of run logs (non-authoritative). | Role 8 |
+
+## Notes
+
+- Source A market/technical atomic factors currently include `adjusted_close_price`, `daily_return`, `dividend_per_share`, `momentum_1m`, and `volatility_20d`.
+- Financial atomic metrics (`book_value`, `shares_outstanding`, `total_debt`, `enterprise_ebitda`, `enterprise_revenue`) are persisted to `financial_observations`.
+- Source B alternative atomic factors include `news_sentiment_daily` and `news_article_count_daily`.
+- Final factor computation is handled by `modules/transform/factors.py` and persisted to `factor_observations`.
+- MinIO paths intentionally include `run_date` for traceability and reproducibility.

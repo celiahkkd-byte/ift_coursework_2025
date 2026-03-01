@@ -1,43 +1,115 @@
 # Data Dictionary
 
-> Descriptions for each core table and field, including data type, unit, source, and notes. Some fields can be updated after code development.
+This document reflects the current implemented schema in `team_Pearson/coursework_one/sql/init.sql` and the current pipeline behavior.
 
----
+## 1. Table: `systematic_equity.company_static`
 
-## 1. Table: company_static
+Upstream universe table used by the pipeline (`modules/db/universe.py`).
 
-| Column Name | Type | Description | Unit | Notes |
-|-------------|------|-------------|------|------|
-| symbol | TEXT | Stock symbol | N/A | Primary key, used to link to other tables |
-| company_name | TEXT | Company name | N/A | - |
-| sector | TEXT | Industry sector | N/A | - |
-| market_cap | FLOAT | Market capitalization | USD | Latest market cap, may change over time |
+| Column Name | Type | Description | Notes |
+| --- | --- | --- | --- |
+| `symbol` | TEXT / VARCHAR | Company ticker | Universe key used by extractors |
+| `company_name` | TEXT | Company name | Optional in pipeline logic |
+| `country` | TEXT | Country code/name | Used by country allowlist filter |
+| `sector` | TEXT | Sector name | Optional metadata |
 
----
+## 2. Table: `systematic_equity.factor_observations`
 
-## 2. Table: factor_observations
+Curated long-table factor store.
 
-| Column Name | Type | Description | Unit | Notes |
-|-------------|------|-------------|------|------|
-| symbol | TEXT | Stock symbol | N/A | Links to company_static.symbol |
-| observation_date | DATE | Factor observation date | YYYY-MM-DD | - |
-| factor_name | TEXT | Factor name | N/A | Dividend Yield, EBITDA Margin, Debt/Equity, P/B, Sentiment |
-| factor_value | FLOAT | Factor value | Ratio / Score | Dividend Yield / EBITDA Margin / Debt-Equity / P/B / Sentiment (-1~1) |
-| run_date | DATE | ETL execution date | YYYY-MM-DD | Tracks the batch of execution |
-| updated_at | TIMESTAMP | Last update timestamp | ISO 8601 | Optional, for data versioning |
-| flag_stale_price | BOOLEAN | Stale price flag | True/False | Specific to Dividend Yield, for quality audit |
-| article_count_30d | INTEGER | Number of news articles in past 30 days | Count | Specific to Sentiment factor, distinguish 0.0 from no news vs mixed news |
-| Data_Expired | BOOLEAN | Data expired flag | True/False | Specific to EBITDA Margin, Debt/Equity, P/B, for quality audit |
+| Column Name | Type | Description | Notes |
+| --- | --- | --- | --- |
+| `id` | SERIAL | Surrogate primary key | Auto-increment |
+| `symbol` | VARCHAR(50) | Company ticker | Required |
+| `observation_date` | DATE | Factor date | Required |
+| `factor_name` | VARCHAR(50) | Factor identifier | Required |
+| `factor_value` | NUMERIC(18,6) | Factor numeric value | Nullable |
+| `source` | VARCHAR(50) | Data source or transform stage | e.g. `alpha_vantage`, `yfinance`, `extractor_b`, `factor_transform` |
+| `metric_frequency` | VARCHAR(20) | Frequency tag | Check constraint: `daily/weekly/monthly/quarterly/annual/unknown` |
+| `source_report_date` | DATE | Source report/reference date | Nullable |
+| `updated_at` | TIMESTAMP | Row update timestamp | Default `CURRENT_TIMESTAMP` |
 
----
+Constraints and indexes:
+- Unique key: `UNIQUE(symbol, observation_date, factor_name)` (`uniq_observation`)
+- Index: `idx_factor_obs_symbol` on `symbol`
+- Index: `idx_factor_obs_observation_date` on `observation_date`
 
-## 3. Table: pipeline_runs (Audit Table)
+Current atomic factors (input/ingest stage):
+- `adjusted_close_price`
+- `daily_return` (log return: `ln(price_t / price_t-1)`)
+- `dividend_per_share`
+- `momentum_1m`
+- `volatility_20d`
+- `news_sentiment_daily`
+- `news_article_count_daily`
 
-| Column Name | Type | Description | Unit | Notes |
-|-------------|------|-------------|------|------|
-| run_id | UUID / TEXT | Unique ETL batch identifier | N/A | Each pipeline run generates a unique ID |
-| start_time | TIMESTAMP | Start time of run | ISO 8601 | - |
-| end_time | TIMESTAMP | End time of run | ISO 8601 | - |
-| status | TEXT | Run status | SUCCESS / FAIL | - |
-| error_message | TEXT | Error message | N/A | Only filled when status=FAIL |
-| company_symbol | TEXT | Company being processed | N/A | Optional, for tracking errors per company |
+Current final factors (transform stage):
+- `dividend_yield`
+- `pb_ratio`
+- `debt_to_equity`
+- `ebitda_margin`
+- `sentiment_30d_avg`
+- `article_count_30d`
+
+## 3. Table: `systematic_equity.financial_observations`
+
+Atomic fundamentals store with financial-report semantics.
+
+| Column Name | Type | Description | Notes |
+| --- | --- | --- | --- |
+| `id` | SERIAL | Surrogate primary key | Auto-increment |
+| `symbol` | VARCHAR(50) | Company ticker | Required |
+| `report_date` | DATE | Financial report period-end | Required |
+| `metric_name` | VARCHAR(100) | Financial metric identifier | Required |
+| `metric_value` | NUMERIC(18,6) | Metric numeric value | Nullable |
+| `currency` | VARCHAR(16) | Currency code | Nullable; often `USD`/`UNKNOWN` |
+| `period_type` | VARCHAR(20) | Financial period type | Check constraint: `annual/quarterly/ttm/snapshot/unknown` |
+| `metric_definition` | VARCHAR(50) | Value definition/semantic tag | Check: `provider_reported/normalized/estimated/unknown` |
+| `source` | VARCHAR(50) | Data source | e.g. `alpha_vantage`, `yfinance` |
+| `as_of` | DATE | Observation/snapshot date | Nullable |
+| `updated_at` | TIMESTAMP | Row update timestamp | Default `CURRENT_TIMESTAMP` |
+
+Constraints and indexes:
+- Unique key: `UNIQUE(symbol, report_date, metric_name)` (`uniq_financial_observation`)
+- Index: `idx_financial_obs_symbol` on `symbol`
+- Index: `idx_financial_obs_report_date` on `report_date`
+
+Current financial atomic metrics:
+- `total_debt`
+- `book_value`
+- `shares_outstanding`
+- `enterprise_ebitda`
+- `enterprise_revenue`
+
+## 4. Table: `systematic_equity.pipeline_runs`
+
+Primary pipeline audit table (source of truth for run-level traceability).
+
+| Column Name | Type | Description | Notes |
+| --- | --- | --- | --- |
+| `run_id` | VARCHAR(64) | Unique pipeline run ID | Primary key |
+| `run_date` | DATE | Business run date from CLI | Required |
+| `started_at` | TIMESTAMPTZ | UTC start time | Required |
+| `finished_at` | TIMESTAMPTZ | UTC finish time | Nullable until finished |
+| `status` | VARCHAR(20) | Run status | Check: `running/success/failed` |
+| `frequency` | VARCHAR(20) | CLI frequency | Nullable |
+| `backfill_years` | INT | Backfill depth | Nullable |
+| `company_limit` | INT | Universe limit | Nullable |
+| `enabled_extractors` | TEXT | Active extractor list | e.g. `source_a,source_b` |
+| `rows_written` | INT | Number of rows written | Default `0` |
+| `error_message` | TEXT | Error summary | Nullable |
+| `error_traceback` | TEXT | Error traceback | Nullable |
+| `notes` | TEXT | Scheduling/provider notes | Nullable |
+| `created_at` | TIMESTAMPTZ | Insert timestamp | Default `CURRENT_TIMESTAMP` |
+| `updated_at` | TIMESTAMPTZ | Update timestamp | Default `CURRENT_TIMESTAMP` |
+
+Supporting index:
+- `idx_pipeline_runs_run_date`
+- `idx_pipeline_runs_status`
+
+## 5. File-Based Audit Mirror
+
+Secondary debug mirror:
+- `logs/pipeline_runs.jsonl`
+
+This mirror is for local troubleshooting only; PostgreSQL `systematic_equity.pipeline_runs` is the authoritative audit source.

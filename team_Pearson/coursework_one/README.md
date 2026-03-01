@@ -149,7 +149,7 @@ Docker-aligned defaults used by this project (single source: repo root `docker-c
 - `POSTGRES_PASSWORD=postgres`
 - `MONGO_HOST=localhost`
 - `MONGO_PORT=27019`
-- `MONGO_DB=admin` (compose does not configure Mongo auth)
+- `MONGO_DB=ift_cw` (project default; compose does not configure Mongo auth)
 - `MINIO_ENDPOINT=localhost:9000`
 - `MINIO_ACCESS_KEY=ift_bigdata`
 - `MINIO_SECRET_KEY=minio_password`
@@ -220,11 +220,10 @@ Implemented technical factors (daily):
 - Rule: if history has fewer than 20 trading days, these observations are dropped.
 
 ## Current status
-This is an integration skeleton for role 4. Pipeline stages are currently mock stubs and will be replaced by module implementations from other roles.
-
 Current delivery focus:
 - Structured pipeline (`source_a`) is integrated end-to-end (extract -> normalize -> quality -> upsert).
-- `source_b` is kept as a pluggable staged module and can be enabled later without changing downstream contracts.
+- Unstructured pipeline (`source_b`) is integrated with staged design (raw ingest to MinIO + sentiment transform).
+- Final-factor transform stage is integrated: atomic factors in Postgres are read and converted into final factors before upsert.
 
 ## Mixed-frequency run examples
 ```bash
@@ -242,13 +241,67 @@ poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run --en
 - `modules.output.normalize_records(records) -> list[dict]`
 - `modules.output.run_quality_checks(records) -> dict`
 - `modules.output.load_curated(records, dry_run: bool) -> int`
+- `modules.transform.compute_final_factor_records(atomic_records, run_date, backfill_years) -> list[dict]`
+- `modules.transform.build_and_load_final_factors(run_date, backfill_years, symbols=None, dry_run=False) -> int`
 
 ## Extractor B staged design
 `extract_source_b` is intentionally pluggable and split into two stages:
-1. `ingest_source_b_raw(...)`: raw collection and lake storage hook (currently stubbed).
-2. `transform_source_b_features(...)`: converts raw payloads to normalized records (currently stubbed).
+1. `ingest_source_b_raw(...)`: raw collection from Alpha Vantage and lake storage in MinIO.
+2. `transform_source_b_features(...)`: converts raw payloads into alternative atomic records (`news_sentiment_daily`, `news_article_count_daily`).
 
-This allows long-running unstructured ingestion to be decoupled from daily pipeline/test runs while keeping downstream schema stable.
+Final monthly factors `sentiment_30d_avg` and `article_count_30d` are computed in `modules/transform/factors.py` from atomic records (daily reduction + date fill + rolling 30D window).
+
+## Optional Search Service (MongoDB)
+This project now supports an optional, rebuildable MongoDB news-search index:
+
+- Collection: `news_articles`
+- One global article per document (deduplicated across symbols)
+- MinIO raw remains source of truth; Mongo index is derivable/idempotent
+
+### Start infrastructure
+From repository root:
+
+```bash
+cd /Users/celiawong/Desktop/ift_coursework_2025
+docker compose up -d mongo_db miniocw minio_client_cw
+```
+
+### Build / rebuild Mongo index from MinIO raw
+From `team_Pearson/coursework_one`:
+
+```bash
+poetry run python scripts/index_news_to_mongo.py --run-date 2026-02-14 --since 2026-01-01 --until 2026-03-01
+```
+
+Key behavior:
+- Dedup `_id` strategy:
+  - Primary: `sha1(url)`
+  - Fallback when URL is missing: `sha1(source|time_published|normalized_title)`
+- Upsert merge strategy:
+  - `UpdateOne(..., upsert=True)` + `$addToSet: {tickers: {$each: [...]}}`
+  - Ensures global uniqueness and ticker mapping without duplicates
+- Required indexes are created automatically:
+  - text index: `title + summary`
+  - time index: `time_published`
+  - array index: `tickers`
+  - sparse unique index: `url`
+
+### Search API via CLI
+From `team_Pearson/coursework_one`:
+
+```bash
+poetry run python scripts/search_news.py --q "earnings surprise" --ticker AAPL --from 2026-01-01 --to 2026-03-01 --limit 20
+```
+
+Supported flags:
+- `--q`: full-text query (Mongo `$text`)
+- `--ticker`: ticker filter
+- `--from`, `--to`: time window
+- `--limit`: max rows
+
+Mongo defaults in these scripts:
+- default database: `ift_cw` (override with `MONGO_DB` / `config.mongo.database`)
+- collection: `news_articles`
 
 ## Output and Infra Ownership
 - Role 3 (primary): `modules/output/load.py` and SQL persistence rules (e.g., `sql/init.sql` with upsert/index/constraints)
@@ -268,6 +321,33 @@ docker exec -i postgres_db_cw psql -U postgres -d postgres -c \
 # rows by source
 docker exec -i postgres_db_cw psql -U postgres -d postgres -c \
 "select source, count(*) from systematic_equity.factor_observations group by source order by count(*) desc;"
+
+# Pipeline run audit (primary DB table)
+docker exec -i postgres_db_cw psql -U postgres -d postgres -c \
+"select run_id, run_date, status, rows_written, started_at, finished_at from systematic_equity.pipeline_runs order by started_at desc limit 20;"
+```
+
+Audit strategy:
+- Primary audit source of truth: `systematic_equity.pipeline_runs` (PostgreSQL)
+- Secondary debug mirror: `logs/pipeline_runs.jsonl` (local file)
+
+## MinIO raw verification (JSONL)
+Quick checks for Source B raw objects (`symbol x month` JSONL):
+
+```bash
+cd team_Pearson/coursework_one
+
+# 1) List monthly raw objects for a run date/year/month
+docker exec -it minio_client_cw sh -lc '
+mc alias set cw http://miniocw:9000 ift_bigdata minio_password >/dev/null &&
+mc ls --recursive cw/csreport/raw/source_b/news/run_date=2026-02-14/year=2026/month=02/
+'
+
+# 2) View first 5 lines from one object (JSONL, one article per line)
+docker exec -it minio_client_cw sh -lc '
+mc alias set cw http://miniocw:9000 ift_bigdata minio_password >/dev/null &&
+mc cat cw/csreport/raw/source_b/news/run_date=2026-02-14/year=2026/month=02/symbol=AAPL.jsonl | head -n 5
+'
 ```
 
 ## Pre-submit validation checklist

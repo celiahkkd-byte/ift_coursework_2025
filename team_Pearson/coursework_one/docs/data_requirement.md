@@ -21,7 +21,7 @@
 - **Look-ahead Bias Prevention:** Price must be queried strictly backward-looking. Use the exact date's close. If the exact date falls on a weekend/holiday, fall back to the most recent trading day, **maximum 3 trading days prior (-3 to 0 days)**. Future prices (+1 to +3 days) are strictly forbidden.
 - **Missing DPS Tolerance:** If dividend history is missing or no dividends were declared within the last 12 months, do NOT drop the observation. Set `Dividend Yield = 0.0`.
 - **Missing Price Tolerance:** If `Adjusted Close Price` is missing, NaN, or ≤ 0 after the 3-day backward look, **DROP** the observation for that specific date to avoid zero-division errors.
-- **Quality Auditing:** Log a warning (`flag_stale_price = True`) if a price older than 1 trading day is used.
+- **Quality Auditing:** Log stale-price usage in run notes/logs when fallback price date is older than 1 trading day.
 
 ---
 
@@ -41,7 +41,7 @@
 - **Negative Revenue:** If `enterprise_revenue` ≤ 0, **DROP** the observation (margins on zero/negative revenue are mathematically meaningless).
 - **Missing Values:** If either `enterprise_ebitda` or `enterprise_revenue` is NULL/NaN, **DROP** the observation. Do not attempt to impute EBITDA.
 - **Staleness Limit:** Data from the internal table must be forward-filled on a daily/monthly basis for portfolio alignment. The maximum allowed staleness from the internal `end_date` is **12 months**.
-- **Expiration:** If the latest available `end_date` is older than 12 months relative to the calculation date, **DROP** the observation and log a `Data_Expired` flag.
+- **Expiration:** If the latest available `end_date` is older than 12 months relative to the calculation date, **DROP** the observation and log expiration in audit notes.
 
 ---
 
@@ -70,18 +70,18 @@
 | Field | Specification |
 |------|--------------|
 | Metric Name | P/B Ratio |
-| Raw Fields | Adjusted Close Price, `outstanding_shares`, `book_value` |
+| Raw Fields | Adjusted Close Price, `shares_outstanding`, `book_value` |
 | Origin Source (Input) | Alpha Vantage (`Price`), Book Value |
 | Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
 | Frequency | Monthly |
 | History | ≥ 5 years |
-| Calculation Logic | P/B = (Price * `outstanding_shares`) / `book_value` |
+| Calculation Logic | P/B = (Price * `shares_outstanding`) / `book_value` |
 
 ### Missing / Error Tolerance & Quality Rules
 - **Look-ahead Bias Prevention:** Price must strictly utilize the [-3 to 0 days] backward-looking rule.
 - **Negative Equity:** If internal `book_value` ≤ 0, **DROP** the observation.
-- **Missing Shares:** If `outstanding_shares` is missing, NaN, or ≤ 0, **DROP** the observation (market cap cannot be calculated).
-- **Staleness Limit:** Internal fundamental data (`book_value`, `outstanding_shares`) may be forward-filled up to **12 months**.
+- **Missing Shares:** If `shares_outstanding` is missing, NaN, or ≤ 0, **DROP** the observation (market cap cannot be calculated).
+- **Staleness Limit:** Internal fundamental data (`book_value`, `shares_outstanding`) may be forward-filled up to **12 months**.
 - **Extreme Values Cap:** Cap P/B ratios at the 99th percentile (e.g., P/B > 100) to prevent data anomalies from skewing Z-score calculations in Coursework 2.
 
 ---
@@ -91,17 +91,41 @@
 | Field | Specification |
 |------|--------------|
 | Metric Name | News Sentiment |
-| Raw Fields | Article Sentiment Score, Timestamp |
-| Origin Source (Input) | External API (e.g., Alpha Vantage `NEWS_SENTIMENT` or NewsAPI) |
+| Raw Fields | Article `title`, `summary`, `time_published` |
+| Origin Source (Input) | External API (Alpha Vantage `NEWS_SENTIMENT`) |
 | Target Storage (Output) | MinIO (Raw JSON) → PostgreSQL (`factor_observations`) |
 | Frequency | Daily (aggregated to monthly for portfolio rebalancing) |
 | History | ≥ 5 years (where available depending on API limits) |
-| Calculation Logic | Simple Average of sentiment scores over a rolling 30-day window. |
+| Calculation Logic | Article-level custom score from text (`title+summary`) → daily mean by `symbol+date` → fill missing days with `0.0` → rolling `30D` mean (`sentiment_30d_avg`). |
 
 ### Missing / Error Tolerance & Quality Rules
 - **Zero News Fallback:** If NO news articles are found for a given company within the trailing 30-day window, **DO NOT DROP** the observation. Assign a neutral sentiment score of **0.0**.
 - **Data Capping:** Hard cap all computed sentiment scores to a range of `[-1.0, 1.0]`.
-- **Audit Logging:** The system must record `article_count_30d` as a secondary metadata column alongside the score to distinguish between a "0.0 due to no news" vs a "0.0 due to mixed news".
+- **Audit Logging:** Track article-volume context in transform/audit logs. `article_count_30d` is persisted monthly in `factor_observations` by transform stage.
+
+### Implementation Notes (Current Codebase)
+- `extractor_b` stores raw news payloads in MinIO as JSONL monthly objects (`symbol x month`, deduplicated by URL with `title+time_published` fallback) and emits alternative atomic rows (`factor_name in {news_sentiment_daily, news_article_count_daily}`).
+- Final monthly signals are produced in transform stage (`modules/transform/factors.py`) as `factor_name in {sentiment_30d_avg, article_count_30d}`.
+- The 30-day signal is time-window based (`rolling('30D')`), not row-count based.
+
+---
+
+## 6. Daily Return (Market Atomic)
+
+| Field | Specification |
+|------|--------------|
+| Metric Name | Daily Return |
+| Raw Fields | Adjusted Close Price (`P_t`, `P_{t-1}`) |
+| Origin Source (Input) | Source A price history (Alpha Vantage primary, yfinance fallback) |
+| Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
+| Frequency | Daily |
+| History | ≥ 5 years |
+| Calculation Logic | `daily_return = ln(P_t / P_{t-1})` |
+
+### Missing / Error Tolerance & Quality Rules
+- **Insufficient History:** If no valid previous close exists (`P_{t-1}`), set `daily_return = NULL` for that day (do not fabricate returns).
+- **Non-Positive Price Guard:** If either `P_t` or `P_{t-1}` is missing, NaN, or ≤ 0, set `daily_return = NULL`.
+- **No Look-Ahead:** Strictly backward-looking (`t` uses only `t-1`), never future prices.
 
 ---
 
@@ -124,6 +148,7 @@ The pipeline and infrastructure must pass the following verifiable automated cri
 - **Dynamic Universe:** The pipeline must dynamically query `systematic_equity.company_static` at runtime. Adding or removing a symbol from this table must immediately reflect in the pipeline's execution loop without requiring codebase changes.
 - **Idempotency & Uniqueness:** The pipeline must be idempotent. Rerunning the pipeline for the same date range must not duplicate data. PostgreSQL must utilize a composite Unique Constraint (`symbol`, `factor_name`, `observation_date`) combined with an `INSERT ... ON CONFLICT DO UPDATE` (Upsert) strategy.
 - **Non-Blocking Execution:** If the API request for `company A` fails (e.g., HTTP 404 or 500), the pipeline must catch the exception, log the error trace to a `pipeline_runs` audit table, and seamlessly continue processing `company B`.
+  - Current implementation: primary audit sink is PostgreSQL table `systematic_equity.pipeline_runs`; local JSONL remains as secondary debug mirror.
 
 ### 4. Quality Auditability
 - **Lineage Tracing:** Every row in the curated PostgreSQL table must include a `run_id` or `updated_at` timestamp linking it back to the specific execution batch that fetched the raw data from MinIO.
