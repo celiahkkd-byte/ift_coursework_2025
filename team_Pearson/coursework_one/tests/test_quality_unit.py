@@ -6,7 +6,7 @@ def test_quality_counts_missing_and_duplicates_by_db_unique_key():
         {
             "symbol": "SYM00001",
             "observation_date": "2026-02-14",
-            "factor_name": "pb",
+            "factor_name": "pb_ratio",
             "factor_value": 1.0,
             "source": "source_a",
             "metric_frequency": "daily",
@@ -15,7 +15,7 @@ def test_quality_counts_missing_and_duplicates_by_db_unique_key():
         {
             "symbol": "SYM00001",
             "observation_date": "2026-02-14",
-            "factor_name": "pb",
+            "factor_name": "pb_ratio",
             "factor_value": None,
             "source": "source_b",
             "metric_frequency": "daily",
@@ -35,7 +35,7 @@ def test_quality_flags_missing_required_and_invalid_frequency():
         {
             "symbol": None,
             "observation_date": "2026-02-14",
-            "factor_name": "pb",
+            "factor_name": "pb_ratio",
             "factor_value": 1.0,
             "source": "source_a",
             "metric_frequency": "daily",
@@ -43,7 +43,7 @@ def test_quality_flags_missing_required_and_invalid_frequency():
         {
             "symbol": "SYM00002",
             "observation_date": "2026-02-14",
-            "factor_name": "pb",
+            "factor_name": "pb_ratio",
             "factor_value": 1.0,
             "source": "source_a",
             "metric_frequency": "hourly",  # invalid

@@ -105,7 +105,7 @@ Current data requirements reference / 当前需求对应频率示例:
 - `News Sentiment`: daily
 - `Dividend Yield`, `P/B`: monthly
 - `Debt/Equity`: quarterly
-- `EBITDA Margin`: quarterly/annual
+- `EBITDA Margin`: quarterly
 
 ## 5) Integrator flow / 总装流程（已接入）
 - `get_company_universe`
@@ -249,7 +249,7 @@ Current data requirements reference / 当前需求对应频率示例:
 - MongoDB:
   - `MONGO_HOST=localhost`
   - `MONGO_PORT=27019`
-  - `MONGO_DB=admin`
+  - `MONGO_DB=ift_cw`
 - MinIO:
   - `MINIO_ENDPOINT=localhost:9000`
   - `MINIO_ACCESS_KEY=ift_bigdata`
@@ -284,7 +284,7 @@ Current data requirements reference / 当前需求对应频率示例:
 - MongoDB：
   - `MONGO_HOST=localhost`
   - `MONGO_PORT=27019`
-  - `MONGO_DB=admin`
+  - `MONGO_DB=ift_cw`
 - MinIO：
   - `MINIO_ENDPOINT=localhost:9000`
   - `MINIO_ACCESS_KEY=ift_bigdata`

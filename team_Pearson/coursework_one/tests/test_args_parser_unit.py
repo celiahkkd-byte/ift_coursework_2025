@@ -37,3 +37,9 @@ def test_build_parser_parses_enabled_extractors_as_list():
         ]
     )
     assert args.enabled_extractors == ["source_a", "source_b"]
+
+
+def test_build_parser_allows_missing_frequency_for_config_default():
+    parser = build_parser()
+    args = parser.parse_args([])
+    assert args.frequency is None

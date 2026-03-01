@@ -19,6 +19,13 @@ def test_resolve_alpha_key_ignores_placeholders(monkeypatch):
     assert out == ""
 
 
+def test_resolve_alpha_key_reads_legacy_conf_field(monkeypatch):
+    monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
+    monkeypatch.delenv("ALPHA_VANTAGE_KEY", raising=False)
+    out = source_b._resolve_alpha_key({"alpha_vantage": {"api_key": "abc123"}})
+    assert out == "abc123"
+
+
 def test_minio_config_normalizes_endpoint(monkeypatch):
     monkeypatch.setenv("MINIO_ENDPOINT", "http://localhost:9000")
     cfg = source_b._minio_config({"minio": {"bucket": "csreport"}})
@@ -30,6 +37,8 @@ def test_minio_config_normalizes_endpoint(monkeypatch):
 def test_month_helpers():
     months = source_b._month_end_dates("2026-02-14", 1)
     assert months[-1] <= date(2026, 2, 14)
+    months_inc = source_b._month_end_dates("2026-02-14", 0)
+    assert months_inc == [date(2026, 2, 14)]
     start, end = source_b._month_time_range(date(2026, 2, 28))
     assert start == "20260201T0000"
     assert end == "20260228T2359"
@@ -179,7 +188,9 @@ def test_transform_source_b_features_monthly_record(monkeypatch):
     assert sent["source_report_date"] == "2026-02-15"
     assert sent["observation_date"] == "2026-02-15"
     assert isinstance(sent["factor_value"], float)
+    assert sent["timestamp_inferred"] == 0
     assert cnt["factor_value"] == 1.0
+    assert cnt["timestamp_inferred"] == 0
 
 
 def test_transform_source_b_features_skips_invalid_rows(monkeypatch):
@@ -200,3 +211,37 @@ def test_extract_source_b_test_mode(monkeypatch):
     assert all(r["source"] == "extractor_b" for r in out)
     names = {r["factor_name"] for r in out}
     assert {"news_sentiment_daily", "news_article_count_daily"} == names
+
+
+def test_transform_source_b_features_missing_time_fallback_marks_inferred(monkeypatch):
+    monkeypatch.delenv("CW1_TEST_MODE", raising=False)
+    raw_payloads = [
+        {
+            "symbol": "AAPL",
+            "month_end": "2026-02-28",
+            "feed": [{"title": "Strong profit", "summary": "Positive growth", "time_published": ""}],
+        }
+    ]
+    out = source_b.transform_source_b_features(raw_payloads, ["AAPL"], "2026-02-14", "daily")
+    assert len(out) == 2
+    assert all(r["observation_date"] == "2026-02-28" for r in out)
+    assert all(r["timestamp_inferred"] == 1 for r in out)
+
+
+def test_transform_source_b_features_strict_time_drops_missing_time(monkeypatch):
+    monkeypatch.delenv("CW1_TEST_MODE", raising=False)
+    raw_payloads = [
+        {
+            "symbol": "AAPL",
+            "month_end": "2026-02-28",
+            "feed": [{"title": "Strong profit", "summary": "Positive growth", "time_published": ""}],
+        }
+    ]
+    out = source_b.transform_source_b_features(
+        raw_payloads,
+        ["AAPL"],
+        "2026-02-14",
+        "daily",
+        config={"source_b": {"strict_time": True}},
+    )
+    assert out == []

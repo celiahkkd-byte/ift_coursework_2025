@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import re
 from datetime import UTC, datetime
@@ -21,6 +22,20 @@ DEFAULT_MINIO_PREFIX = "raw/source_b/news/"
 SYMBOL_IN_OBJECT_RE = re.compile(r"/symbol=([^/]+)(?:/|\.jsonl$)")
 MAX_TITLE_LEN = 1024
 MAX_SUMMARY_LEN = 8192
+
+logger = logging.getLogger(__name__)
+
+
+def _configure_logging(level_raw: str) -> None:
+    level = str(level_raw or "INFO").strip().upper()
+    root = logging.getLogger()
+    if root.handlers:
+        root.setLevel(getattr(logging, level, logging.INFO))
+        return
+    logging.basicConfig(
+        level=getattr(logging, level, logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
 
 
 def _load_yaml(path: str) -> dict[str, Any]:
@@ -65,16 +80,30 @@ def _build_minio_client(minio_cfg: dict[str, Any]) -> tuple[Minio, str]:
     )
 
 
-def _build_mongo_collection(mongo_cfg: dict[str, Any], collection_name: str) -> Collection:
+def _resolve_mongo_db(cli_mongo_db: str, mongo_cfg: dict[str, Any]) -> str:
+    cli_value = str(cli_mongo_db or "").strip()
+    if cli_value:
+        return cli_value
+    env_value = str(os.getenv("MONGO_DB", "")).strip()
+    if env_value:
+        return env_value
+    cfg_value = str(mongo_cfg.get("database", "")).strip()
+    if cfg_value:
+        return cfg_value
+    return "ift_cw"
+
+
+def _build_mongo_collection(
+    mongo_cfg: dict[str, Any], collection_name: str, mongo_db: str
+) -> Collection:
     host = _read_env_or_cfg("MONGO_HOST", mongo_cfg, "host", "localhost")
     port = int(_read_env_or_cfg("MONGO_PORT", mongo_cfg, "port", "27017"))
-    database = _read_env_or_cfg("MONGO_DB", mongo_cfg, "database", "ift_cw")
     uri = os.getenv("MONGO_URI", "").strip()
     if uri:
         client = MongoClient(uri, serverSelectionTimeoutMS=5000)
     else:
         client = MongoClient(host=host, port=port, serverSelectionTimeoutMS=5000)
-    return client[database][collection_name]
+    return client[mongo_db][collection_name]
 
 
 def _normalize_title(title: str) -> str:
@@ -151,6 +180,7 @@ def _extract_tickers(raw_item: dict[str, Any], object_symbol: str) -> list[str]:
 
 
 def _ensure_indexes(coll: Collection) -> None:
+    logger.info("mongo_indexes ensure_start collection=%s", coll.name)
     coll.create_index(
         [("title", "text"), ("summary", "text")],
         name="idx_text_title_summary",
@@ -158,6 +188,7 @@ def _ensure_indexes(coll: Collection) -> None:
     coll.create_index([("time_published", 1)], name="idx_time_published")
     coll.create_index([("tickers", 1)], name="idx_tickers")
     coll.create_index([("url", 1)], name="idx_url_unique", unique=True, sparse=True)
+    logger.info("mongo_indexes ensure_done collection=%s", coll.name)
 
 
 def _iter_jsonl_rows_stream(response: Any) -> Iterator[dict[str, Any]]:
@@ -247,6 +278,15 @@ def index_news(
     }
     ops: list[UpdateOne] = []
 
+    logger.info(
+        "index_news start bucket=%s prefix=%s batch_size=%s symbol_filter_size=%s dry_run=%s",
+        bucket,
+        prefix,
+        batch_size,
+        len(symbol_filter),
+        dry_run,
+    )
+
     for obj in minio_client.list_objects(bucket, prefix=prefix, recursive=True):
         object_name = str(obj.object_name)
         if not object_name.endswith(".jsonl"):
@@ -309,6 +349,14 @@ def index_news(
                         stats["docs_matched"] += int(result.matched_count)
                         stats["docs_modified"] += int(result.modified_count)
                     ops = []
+        except Exception as exc:
+            logger.exception(
+                "object_process_failed object=%s bucket=%s error=%r",
+                object_name,
+                bucket,
+                exc,
+            )
+            continue
         finally:
             response.close()
             response.release_conn()
@@ -319,6 +367,18 @@ def index_news(
         stats["docs_upserted"] += int(result.upserted_count)
         stats["docs_matched"] += int(result.matched_count)
         stats["docs_modified"] += int(result.modified_count)
+    logger.info(
+        "index_news done objects_scanned=%s articles_seen=%s filtered_by_time=%s ops_submitted=%s "
+        "bulk_calls=%s upserted=%s matched=%s modified=%s",
+        stats["objects_scanned"],
+        stats["articles_seen"],
+        stats["articles_filtered_by_time"],
+        stats["ops_submitted"],
+        stats["bulk_calls"],
+        stats["docs_upserted"],
+        stats["docs_matched"],
+        stats["docs_modified"],
+    )
     return stats
 
 
@@ -341,46 +401,66 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prefix", default=DEFAULT_MINIO_PREFIX)
     parser.add_argument("--skip-indexes", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--log-level", default=os.getenv("CW1_LOG_LEVEL", "INFO"))
+    parser.add_argument("--mongo-db", default="", help="Mongo database name.")
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    minio_cfg, mongo_cfg = _resolve_config(args.config)
-    minio_client, bucket = _build_minio_client(minio_cfg)
-    coll = _build_mongo_collection(mongo_cfg, args.collection)
+    _configure_logging(args.log_level)
+    try:
+        minio_cfg, mongo_cfg = _resolve_config(args.config)
+        minio_client, bucket = _build_minio_client(minio_cfg)
+        mongo_db = _resolve_mongo_db(args.mongo_db, mongo_cfg)
+        coll = _build_mongo_collection(mongo_cfg, args.collection, mongo_db)
 
-    if not args.skip_indexes and not args.dry_run:
-        _ensure_indexes(coll)
+        if not args.skip_indexes and not args.dry_run:
+            _ensure_indexes(coll)
 
-    prefix = _build_query_prefix(args.prefix, args.run_date)
-    symbol_filter = {str(s).strip().upper() for s in args.symbol if str(s).strip()}
-    since_dt = _parse_optional_dt(args.since)
-    until_dt = _parse_optional_dt(args.until)
-    stats = index_news(
-        coll=coll,
-        minio_client=minio_client,
-        bucket=bucket,
-        prefix=prefix,
-        batch_size=max(1, int(args.batch_size)),
-        symbol_filter=symbol_filter,
-        since_dt=since_dt,
-        until_dt=until_dt,
-        dry_run=bool(args.dry_run),
-    )
-    print(
-        json.dumps(
-            {
-                "collection": args.collection,
-                "prefix": prefix,
-                "since": since_dt.isoformat() if since_dt else None,
-                "until": until_dt.isoformat() if until_dt else None,
-                **stats,
-            },
-            ensure_ascii=False,
+        prefix = _build_query_prefix(args.prefix, args.run_date)
+        symbol_filter = {str(s).strip().upper() for s in args.symbol if str(s).strip()}
+        since_dt = _parse_optional_dt(args.since)
+        until_dt = _parse_optional_dt(args.until)
+        stats = index_news(
+            coll=coll,
+            minio_client=minio_client,
+            bucket=bucket,
+            prefix=prefix,
+            batch_size=max(1, int(args.batch_size)),
+            symbol_filter=symbol_filter,
+            since_dt=since_dt,
+            until_dt=until_dt,
+            dry_run=bool(args.dry_run),
         )
-    )
-    return 0
+        print(
+            json.dumps(
+                {
+                    "collection": args.collection,
+                    "mongo_db": mongo_db,
+                    "prefix": prefix,
+                    "since": since_dt.isoformat() if since_dt else None,
+                    "until": until_dt.isoformat() if until_dt else None,
+                    **stats,
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
+    except Exception as exc:
+        logger.exception("index_news_to_mongo_failed error=%r", exc)
+        print(
+            json.dumps(
+                {
+                    "error": repr(exc),
+                    "collection": args.collection,
+                    "mongo_db": str(args.mongo_db or "").strip() or None,
+                    "run_date": args.run_date,
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 1
 
 
 if __name__ == "__main__":

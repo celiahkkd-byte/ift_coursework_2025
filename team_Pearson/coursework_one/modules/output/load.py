@@ -6,18 +6,82 @@ import logging
 import math
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from modules.db import get_db_engine
+from modules.db import FactorObservation, FinancialObservation, get_db_engine
 
 logger = logging.getLogger(__name__)
+
+
+def _find_unique_constraint_name(table, expected_cols: set[str], fallback: str) -> str:
+    for constraint in table.constraints:
+        cols = getattr(constraint, "columns", None)
+        name = getattr(constraint, "name", None)
+        if not cols or not name:
+            continue
+        col_names = {c.name for c in cols}
+        if col_names == expected_cols:
+            return str(name)
+    return fallback
+
+
+def _count_existing_rows(
+    conn: Any,
+    *,
+    schema: str,
+    table_name: str,
+    key_columns: tuple[str, ...],
+    records: List[Dict[str, Any]],
+) -> int:
+    """Count existing rows by unique key before upsert (for observability only)."""
+    if not records:
+        return 0
+    from sqlalchemy import text  # type: ignore
+
+    where = " AND ".join([f"{col} = :{col}" for col in key_columns])
+    sql = text(f"SELECT 1 FROM {schema}.{table_name} WHERE {where} LIMIT 1")
+    count = 0
+    for rec in records:
+        params = {k: rec.get(k) for k in key_columns}
+        row = conn.execute(sql, params).first()
+        if row is not None:
+            count += 1
+    return count
+
+
+_FACTOR_TABLE_NAME = FactorObservation.__table__.name
+_FACTOR_DEFAULT_SCHEMA = FactorObservation.__table__.schema or "systematic_equity"
+_FACTOR_CONSTRAINT_UNIQ = _find_unique_constraint_name(
+    FactorObservation.__table__,
+    expected_cols={"symbol", "observation_date", "factor_name"},
+    fallback="uniq_observation",
+)
+
+_FINANCIAL_TABLE_NAME = FinancialObservation.__table__.name
+_FINANCIAL_DEFAULT_SCHEMA = FinancialObservation.__table__.schema or "systematic_equity"
+_FINANCIAL_CONSTRAINT_UNIQ = _find_unique_constraint_name(
+    FinancialObservation.__table__,
+    expected_cols={"symbol", "report_date", "metric_name"},
+    fallback="uniq_financial_observation",
+)
+
+def _coerce_finite_float_or_none(value: Any) -> float | None:
+    """Convert numeric-like value to finite float, otherwise None."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(v):
+        return None
+    return v
 
 
 def load_curated(
     records: List[Dict[str, Any]],
     *,
     dry_run: bool = False,
-    table_name: str = "factor_observations",
+    table_name: str = _FACTOR_TABLE_NAME,
+    stats_out: Optional[Dict[str, int]] = None,
 ) -> int:
     """Load curated records into PostgreSQL with upsert semantics.
 
@@ -43,8 +107,19 @@ def load_curated(
         If required columns are missing in input records.
     """
     if not records:
+        if stats_out is not None:
+            stats_out.update({"attempted": 0, "inserted": 0, "updated": 0, "invalid": 0})
         return 0
     if dry_run:
+        if stats_out is not None:
+            stats_out.update(
+                {
+                    "attempted": int(len(records)),
+                    "inserted": int(len(records)),
+                    "updated": 0,
+                    "invalid": 0,
+                }
+            )
         return len(records)
 
     try:
@@ -58,13 +133,14 @@ def load_curated(
         ) from e
 
     df = pd.DataFrame.from_records(records)
+    attempted_count = int(len(df))
 
     required = {"symbol", "observation_date", "factor_name"}
     if not required.issubset(df.columns):
         missing = required.difference(df.columns)
         raise ValueError(f"Missing required columns for load: {sorted(missing)}")
 
-    schema = os.getenv("POSTGRES_SCHEMA", "systematic_equity")
+    schema = os.getenv("POSTGRES_SCHEMA", _FACTOR_DEFAULT_SCHEMA)
 
     engine = get_db_engine()
     metadata = MetaData()
@@ -84,6 +160,10 @@ def load_curated(
         obs = pd.to_datetime(df["observation_date"], errors="coerce")
         df = df[obs.notna()].copy()
         if df.empty:
+            if stats_out is not None:
+                stats_out.update(
+                    {"attempted": attempted_count, "inserted": 0, "updated": 0, "invalid": attempted_count}
+                )
             return 0
         df["observation_date"] = obs[obs.notna()].dt.date.values
 
@@ -93,13 +173,15 @@ def load_curated(
         df["source_report_date"] = [ts.date() if pd.notna(ts) else None for ts in report]
     if "factor_value" in df.columns:
         df["factor_value"] = pd.to_numeric(df["factor_value"], errors="coerce")
-        df["factor_value"] = df["factor_value"].map(
-            lambda x: (
-                None if (x is None or (isinstance(x, float) and not math.isfinite(x))) else float(x)
-            )
+        df["factor_value"] = (
+            df["factor_value"]
+            .map(_coerce_finite_float_or_none)
+            .astype("object")
+            .where(pd.notna(df["factor_value"]), None)
         )
 
     records_out = df.to_dict(orient="records")
+    invalid_count = max(0, attempted_count - int(len(records_out)))
     stmt = pg_insert(table).values(records_out)
 
     update_dict = {
@@ -111,12 +193,33 @@ def load_curated(
     }
 
     upsert_stmt = stmt.on_conflict_do_update(
-        constraint="uniq_observation",
+        constraint=_FACTOR_CONSTRAINT_UNIQ,
         set_=update_dict,
     )
 
     with engine.begin() as conn:
+        existing_count = 0
+        if stats_out is not None:
+            existing_count = _count_existing_rows(
+                conn,
+                schema=schema,
+                table_name=table_name,
+                key_columns=("symbol", "observation_date", "factor_name"),
+                records=records_out,
+            )
         conn.execute(upsert_stmt)
+
+    if stats_out is not None:
+        updated_count = min(existing_count, int(len(records_out)))
+        inserted_count = int(len(records_out)) - updated_count
+        stats_out.update(
+            {
+                "attempted": attempted_count,
+                "inserted": inserted_count,
+                "updated": updated_count,
+                "invalid": invalid_count,
+            }
+        )
 
     return len(records_out)
 
@@ -125,12 +228,24 @@ def load_financial_observations(
     records: List[Dict[str, Any]],
     *,
     dry_run: bool = False,
-    table_name: str = "financial_observations",
+    table_name: str = _FINANCIAL_TABLE_NAME,
+    stats_out: Optional[Dict[str, int]] = None,
 ) -> int:
     """Load atomic financial observations into PostgreSQL with upsert semantics."""
     if not records:
+        if stats_out is not None:
+            stats_out.update({"attempted": 0, "inserted": 0, "updated": 0, "invalid": 0})
         return 0
     if dry_run:
+        if stats_out is not None:
+            stats_out.update(
+                {
+                    "attempted": int(len(records)),
+                    "inserted": int(len(records)),
+                    "updated": 0,
+                    "invalid": 0,
+                }
+            )
         return len(records)
 
     try:
@@ -144,12 +259,13 @@ def load_financial_observations(
         ) from e
 
     df = pd.DataFrame.from_records(records)
+    attempted_count = int(len(df))
     required = {"symbol", "report_date", "metric_name"}
     if not required.issubset(df.columns):
         missing = required.difference(df.columns)
         raise ValueError(f"Missing required columns for financial load: {sorted(missing)}")
 
-    schema = os.getenv("POSTGRES_SCHEMA", "systematic_equity")
+    schema = os.getenv("POSTGRES_SCHEMA", _FINANCIAL_DEFAULT_SCHEMA)
     engine = get_db_engine()
     metadata = MetaData()
     table = Table(table_name, metadata, schema=schema, autoload_with=engine)
@@ -162,6 +278,10 @@ def load_financial_observations(
     report = pd.to_datetime(df["report_date"], errors="coerce")
     df = df[report.notna()].copy()
     if df.empty:
+        if stats_out is not None:
+            stats_out.update(
+                {"attempted": attempted_count, "inserted": 0, "updated": 0, "invalid": attempted_count}
+            )
         return 0
     df["report_date"] = report[report.notna()].dt.date.values
 
@@ -171,13 +291,15 @@ def load_financial_observations(
 
     if "metric_value" in df.columns:
         df["metric_value"] = pd.to_numeric(df["metric_value"], errors="coerce")
-        df["metric_value"] = df["metric_value"].map(
-            lambda x: (
-                None if (x is None or (isinstance(x, float) and not math.isfinite(x))) else float(x)
-            )
+        df["metric_value"] = (
+            df["metric_value"]
+            .map(_coerce_finite_float_or_none)
+            .astype("object")
+            .where(pd.notna(df["metric_value"]), None)
         )
 
     records_out = df.to_dict(orient="records")
+    invalid_count = max(0, attempted_count - int(len(records_out)))
     stmt = pg_insert(table).values(records_out)
     update_dict = {
         "metric_value": stmt.excluded.metric_value,
@@ -189,9 +311,29 @@ def load_financial_observations(
         "updated_at": datetime.now(),
     }
     upsert_stmt = stmt.on_conflict_do_update(
-        constraint="uniq_financial_observation",
+        constraint=_FINANCIAL_CONSTRAINT_UNIQ,
         set_=update_dict,
     )
     with engine.begin() as conn:
+        existing_count = 0
+        if stats_out is not None:
+            existing_count = _count_existing_rows(
+                conn,
+                schema=schema,
+                table_name=table_name,
+                key_columns=("symbol", "report_date", "metric_name"),
+                records=records_out,
+            )
         conn.execute(upsert_stmt)
+    if stats_out is not None:
+        updated_count = min(existing_count, int(len(records_out)))
+        inserted_count = int(len(records_out)) - updated_count
+        stats_out.update(
+            {
+                "attempted": attempted_count,
+                "inserted": inserted_count,
+                "updated": updated_count,
+                "invalid": invalid_count,
+            }
+        )
     return len(records_out)

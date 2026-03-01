@@ -33,15 +33,15 @@
 | Raw Fields | `ebitda`, `revenue`, `end_date` |
 | Origin Source (Input) | Alpha Vantage |
 | Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
-| Frequency | Quarterly/Annual (aligned with internal table updates) |
+| Frequency | Quarterly |
 | History | ≥ 5 years |
 | Calculation Logic | EBITDA Margin = `enterprise_ebitda` / `enterprise_revenue` |
 
 ### Missing / Error Tolerance & Quality Rules
 - **Negative Revenue:** If `enterprise_revenue` ≤ 0, **DROP** the observation (margins on zero/negative revenue are mathematically meaningless).
 - **Missing Values:** If either `enterprise_ebitda` or `enterprise_revenue` is NULL/NaN, **DROP** the observation. Do not attempt to impute EBITDA.
-- **Staleness Limit:** Data from the internal table must be forward-filled on a daily/monthly basis for portfolio alignment. The maximum allowed staleness from the internal `end_date` is **12 months**.
-- **Expiration:** If the latest available `end_date` is older than 12 months relative to the calculation date, **DROP** the observation and log expiration in audit notes.
+- **Soft Stale Warning:** If data age is in `(270, 365]` days, keep the observation but log `flag_financial_stale=True`.
+- **Hard Expiration:** If data age is `> 365` days, **DROP** the observation and log `flag_data_expired=True`.
 
 ---
 
@@ -50,18 +50,19 @@
 | Field | Specification |
 |------|--------------|
 | Metric Name | Debt/Equity |
-| Raw Fields | Total Debt (Short-term + Long-term), `Equity` |
+| Raw Fields | `total_debt`, `total_shareholder_equity` |
 | Origin Source (Input) | Alpha Vantage |
 | Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
-| Frequency | Quarterly |
+| Frequency | Financial update cadence: Quarterly; factor output cadence: Daily as-of (for backtest alignment) |
 | History | ≥ 5 years |
-| Calculation Logic | Debt/Equity = Total Debt / `book_value` |
+| Calculation Logic | Debt/Equity = `total_debt` / `total_shareholder_equity` |
 
 ### Missing / Error Tolerance & Quality Rules
 - **Missing Debt Fallback:** If `Total Debt` is missing directly from the API, attempt to calculate it as `Short-term Debt + Long-term Debt`. If both are missing, **DROP** the observation.
-- **Negative Equity:** If internal `book_value` ≤ 0, **DROP** the observation. Highly distressed companies with negative equity produce misleading D/E ratios.
-- **Cross-Source Staleness Limit:** External Debt and Internal Book Value may be published on different dates. Both components may be forward-filled up to a maximum of **9 months** from their respective report dates.
-- **Interpolation:** Strict **NO**. Step-forward fill only.
+- **Negative Equity:** If `total_shareholder_equity` ≤ 0, **DROP** the observation. Highly distressed companies with negative equity produce misleading D/E ratios.
+- **Soft Stale Warning:** If either component age is in `(270, 365]` days, keep the observation but log `flag_financial_stale=True`.
+- **Hard Expiration:** If either component age is `> 365` days, **DROP** the observation and log `flag_data_expired=True`.
+- **Interpolation:** Strict **NO**. Financial atomics remain quarterly updates; daily D/E is stepwise as-of alignment only (for backtest timeline consistency).
 
 ---
 
@@ -70,19 +71,23 @@
 | Field | Specification |
 |------|--------------|
 | Metric Name | P/B Ratio |
-| Raw Fields | Adjusted Close Price, `shares_outstanding`, `book_value` |
-| Origin Source (Input) | Alpha Vantage (`Price`), Book Value |
+| Raw Fields | Adjusted Close Price, `shares_outstanding`, `total_shareholder_equity` |
+| Origin Source (Input) | Source A atomic factors (Alpha Vantage primary, yfinance fallback) |
 | Target Storage (Output) | PostgreSQL (`systematic_equity.factor_observations`) |
 | Frequency | Monthly |
 | History | ≥ 5 years |
-| Calculation Logic | P/B = (Price * `shares_outstanding`) / `book_value` |
+| Calculation Logic | P/B = (Adjusted Close Price * `shares_outstanding`) / `total_shareholder_equity` |
 
 ### Missing / Error Tolerance & Quality Rules
-- **Look-ahead Bias Prevention:** Price must strictly utilize the [-3 to 0 days] backward-looking rule.
-- **Negative Equity:** If internal `book_value` ≤ 0, **DROP** the observation.
+- **Look-ahead Bias Prevention:** Price must strictly utilize the [-3 to 0 trading days] backward-looking rule.
+- **Negative Equity:** If `total_shareholder_equity` ≤ 0, **DROP** the observation.
 - **Missing Shares:** If `shares_outstanding` is missing, NaN, or ≤ 0, **DROP** the observation (market cap cannot be calculated).
-- **Staleness Limit:** Internal fundamental data (`book_value`, `shares_outstanding`) may be forward-filled up to **12 months**.
-- **Extreme Values Cap:** Cap P/B ratios at the 99th percentile (e.g., P/B > 100) to prevent data anomalies from skewing Z-score calculations in Coursework 2.
+- **Missing Price Tolerance:** If `Adjusted Close Price` is missing, NaN, or ≤ 0 after the 3-trading-day backward look, **DROP** the observation for that specific date.
+- **Quality Auditing:** Log `flag_stale_price=True` warning when fallback price is older than 1 trading day.
+- **Soft Stale Warning:** If financial components (`total_shareholder_equity`, `shares_outstanding`) age is in `(270, 365]` days, keep the observation but log `flag_financial_stale=True`.
+- **Hard Expiration:** If financial components age is `> 365` days, **DROP** the observation and log `flag_data_expired=True`.
+- **Logging Mode:** Default mode emits per-run summary counts (`stale_count`, `expired_count`) to avoid log flooding; set `QUALITY_VERBOSE_EVENTS=1` to emit per-event warning lines.
+- **Extreme Values Cap:** Apply monthly cross-sectional 99th-percentile cap for P/B ratios. If the monthly cross section has fewer than `50` symbols, fallback to fixed cap `100.0` to avoid unstable small-sample quantiles.
 
 ---
 
@@ -94,18 +99,20 @@
 | Raw Fields | Article `title`, `summary`, `time_published` |
 | Origin Source (Input) | External API (Alpha Vantage `NEWS_SENTIMENT`) |
 | Target Storage (Output) | MinIO (Raw JSON) → PostgreSQL (`factor_observations`) |
-| Frequency | Daily (aggregated to monthly for portfolio rebalancing) |
+| Frequency | Daily |
 | History | ≥ 5 years (where available depending on API limits) |
 | Calculation Logic | Article-level custom score from text (`title+summary`) → daily mean by `symbol+date` → fill missing days with `0.0` → rolling `30D` mean (`sentiment_30d_avg`). |
 
 ### Missing / Error Tolerance & Quality Rules
+- **Raw Row Required Fields:** At transform stage, drop raw sentiment rows if required fields are missing/unparseable (`symbol`, `observation_date`, sentiment value). Do not impute malformed raw rows.
 - **Zero News Fallback:** If NO news articles are found for a given company within the trailing 30-day window, **DO NOT DROP** the observation. Assign a neutral sentiment score of **0.0**.
+- **No-News Day Handling:** For daily aggregation calendar, if a company has no article on a day, fill daily sentiment and article count with `0.0` before rolling `30D` computation.
 - **Data Capping:** Hard cap all computed sentiment scores to a range of `[-1.0, 1.0]`.
-- **Audit Logging:** Track article-volume context in transform/audit logs. `article_count_30d` is persisted monthly in `factor_observations` by transform stage.
+- **Audit Logging:** Track article-volume context in transform/audit logs. `article_count_30d` is persisted daily in `factor_observations` by transform stage.
 
 ### Implementation Notes (Current Codebase)
 - `extractor_b` stores raw news payloads in MinIO as JSONL monthly objects (`symbol x month`, deduplicated by URL with `title+time_published` fallback) and emits alternative atomic rows (`factor_name in {news_sentiment_daily, news_article_count_daily}`).
-- Final monthly signals are produced in transform stage (`modules/transform/factors.py`) as `factor_name in {sentiment_30d_avg, article_count_30d}`.
+- Final daily signals are produced in transform stage (`modules/transform/factors.py`) as `factor_name in {sentiment_30d_avg, article_count_30d}`.
 - The 30-day signal is time-window based (`rolling('30D')`), not row-count based.
 
 ---
@@ -126,6 +133,7 @@
 - **Insufficient History:** If no valid previous close exists (`P_{t-1}`), set `daily_return = NULL` for that day (do not fabricate returns).
 - **Non-Positive Price Guard:** If either `P_t` or `P_{t-1}` is missing, NaN, or ≤ 0, set `daily_return = NULL`.
 - **No Look-Ahead:** Strictly backward-looking (`t` uses only `t-1`), never future prices.
+- **Market-Year Convention:** Use `252` trading days as the 1-year market convention for market-data staleness and annualized calculations.
 
 ---
 

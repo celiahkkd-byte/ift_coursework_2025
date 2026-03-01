@@ -14,8 +14,8 @@ This document describes the implemented end-to-end data flow from source APIs to
 - Raw payload archived to MinIO:
   - `raw/source_a/pricing_fundamentals/run_date=YYYY-MM-DD/year=YYYY/symbol=XXX.json`
 - Atomic rows produced into pipeline stream:
-  - Market/technical atomic (`adjusted_close_price`, `daily_return`, `dividend_per_share`, `momentum_1m`, `volatility_20d`) -> `factor_observations`
-  - Financial atomic (`book_value`, `shares_outstanding`, `total_debt`, `enterprise_ebitda`, `enterprise_revenue`) -> `financial_observations`
+  - Market atomic (`adjusted_close_price`, `daily_return`, `dividend_per_share`) -> `factor_observations`
+  - Financial atomic (`book_value`, `total_shareholder_equity`, `shares_outstanding`, `total_debt`, `enterprise_ebitda`, `enterprise_revenue`) -> `financial_observations`
 
 3. Source B (unstructured news text):
 - Alpha Vantage `NEWS_SENTIMENT` is used for article text ingestion.
@@ -34,7 +34,7 @@ This document describes the implemented end-to-end data flow from source APIs to
 
 5. Final-factor transform stage:
 - Read market/alternative atomic from `factor_observations` and financial atomic from `financial_observations`.
-- Compute final factors in `modules/transform/factors.py`.
+- Compute final factors in `modules/transform/factors.py` (including recomputed technical daily factors `momentum_1m` and `volatility_20d` from `adjusted_close_price`).
 - Write final factors back to `factor_observations`.
 
 6. Audit:
@@ -45,10 +45,12 @@ This document describes the implemented end-to-end data flow from source APIs to
 
 | Final Factor | Atomic Inputs | Core Rule | Output |
 | --- | --- | --- | --- |
-| `dividend_yield` | `dividend_per_share`, `adjusted_close_price` | TTM DPS / backward-looking price (month-end, max 3-day lookback) | `factor_observations` |
-| `pb_ratio` | `adjusted_close_price`, `shares_outstanding`, `book_value` | `(price * shares) / book_value`, positive checks, cap at 100 | `factor_observations` |
-| `debt_to_equity` | `total_debt`, `book_value` | `total_debt / book_value`, quarterly, stale limit 270 days | `factor_observations` |
-| `ebitda_margin` | `enterprise_ebitda`, `enterprise_revenue` | `ebitda / revenue`, revenue must be positive | `factor_observations` |
+| `dividend_yield` | `dividend_per_share`, `adjusted_close_price` | TTM DPS / backward-looking price (month-end, max 3 trading-day lookback) | `factor_observations` |
+| `pb_ratio` | `adjusted_close_price`, `shares_outstanding`, `total_shareholder_equity` | `(price * shares) / total_shareholder_equity`, positive checks, monthly cross-sectional cap at 99th percentile (fallback `100.0` when month sample size < `50`), max 3 trading-day lookback (`flag_stale_price=True` warning if fallback >1 trading day), financial staleness: soft `(270,365]` warning / hard `>365` drop | `factor_observations` |
+| `debt_to_equity` | `total_debt`, `total_shareholder_equity` | `total_debt / total_shareholder_equity`; atomics update quarterly, factor is expanded daily as-of (stepwise) for backtest alignment; financial staleness: soft `(270,365]` warning / hard `>365` drop | `factor_observations` |
+| `momentum_1m` | `adjusted_close_price` | `price / price.shift(20) - 1` (daily) | `factor_observations` |
+| `volatility_20d` | `adjusted_close_price` | `std(pct_change(price), rolling 20)` (daily) | `factor_observations` |
+| `ebitda_margin` | `enterprise_ebitda`, `enterprise_revenue` | `ebitda / revenue`, revenue must be positive, financial staleness: soft `(270,365]` warning / hard `>365` drop | `factor_observations` |
 | `sentiment_30d_avg` | `news_sentiment_daily` | daily mean->fill missing dates with `0.0`->rolling `30D` mean, capped `[-1,1]` | `factor_observations` |
 | `article_count_30d` | `news_article_count_daily` | daily count->fill missing dates with `0.0`->rolling `30D` sum | `factor_observations` |
 

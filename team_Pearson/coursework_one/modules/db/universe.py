@@ -15,14 +15,14 @@ UNIVERSE_SELECT_SQL = {
     FROM systematic_equity.company_static
     {where_clause}
     ORDER BY symbol
-    LIMIT :limit;
+    {limit_clause}
     """,
     "equity_static": """
     SELECT DISTINCT symbol
     FROM systematic_equity.equity_static
     {where_clause}
     ORDER BY symbol
-    LIMIT :limit;
+    {limit_clause}
     """,
 }
 
@@ -32,16 +32,26 @@ UNIVERSE_COUNT_SQL = {
 }
 
 
-def _test_mode_symbols(limit: int) -> list[str]:
+def _test_mode_symbols(limit: Optional[int]) -> list[str]:
     symbols = ["AAPL", "MSFT", "GOOG", "AMZN", "TSLA"]
+    if limit is None:
+        return symbols
     return symbols[:limit]
 
 
-def _normalize_country_allowlist(country_allowlist: Optional[List[str]]) -> List[str]:
+def _normalize_country_allowlist(country_allowlist: Optional[object]) -> List[str]:
     if not country_allowlist:
         return []
+    if isinstance(country_allowlist, str):
+        items = [x for x in country_allowlist.split(",")]
+    elif isinstance(country_allowlist, list):
+        items = country_allowlist
+    else:
+        raise ValueError(
+            f"Invalid country_allowlist={country_allowlist!r}. Expected list or comma-separated string."
+        )
     out = []
-    for country in country_allowlist:
+    for country in items:
         c = str(country).strip().upper()
         if c and c not in out:
             out.append(c)
@@ -62,14 +72,14 @@ def _dedupe_symbols(symbols: List[str]) -> List[str]:
 
 
 def get_company_universe(
-    company_limit: int, country_allowlist: Optional[List[str]] = None
+    company_limit: Optional[int], country_allowlist: Optional[object] = None
 ) -> list[str]:
     """Return company symbols from ``systematic_equity.company_static``.
 
     Parameters
     ----------
     company_limit:
-        Maximum number of symbols to return. Values below 1 are coerced to 1.
+        Maximum number of symbols to return. ``None`` or values ``<=0`` mean unlimited.
     country_allowlist:
         Optional list of country codes (e.g., ``["US", "GB"]``). If provided,
         only symbols from those countries are returned.
@@ -80,7 +90,12 @@ def get_company_universe(
         Ordered list of symbols. In test mode (``CW1_TEST_MODE=1``), returns a
         deterministic stub list.
     """
-    limit = max(1, int(company_limit))
+    limit: Optional[int]
+    if company_limit is None:
+        limit = None
+    else:
+        parsed_limit = int(company_limit)
+        limit = None if parsed_limit <= 0 else parsed_limit
     countries = _normalize_country_allowlist(country_allowlist)
 
     if os.getenv("CW1_TEST_MODE") == "1":
@@ -90,7 +105,11 @@ def get_company_universe(
     with engine.connect() as conn:
         errors = []
         for table_name in ("company_static", "equity_static"):
-            params = {"limit": limit}
+            params = {}
+            limit_clause = ""
+            if limit is not None:
+                params["limit"] = limit
+                limit_clause = "LIMIT :limit"
             where_clause = ""
             if countries:
                 placeholders = []
@@ -100,7 +119,11 @@ def get_company_universe(
                     params[key] = country
                 where_clause = f"WHERE country IN ({', '.join(placeholders)})"
 
-            sql = text(UNIVERSE_SELECT_SQL[table_name].format(where_clause=where_clause))
+            sql = text(
+                UNIVERSE_SELECT_SQL[table_name].format(
+                    where_clause=where_clause, limit_clause=limit_clause
+                )
+            )
             try:
                 rows = conn.execute(sql, params).fetchall()
                 return _dedupe_symbols([str(r[0]) for r in rows])

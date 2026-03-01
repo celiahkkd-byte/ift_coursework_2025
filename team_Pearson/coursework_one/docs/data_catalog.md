@@ -14,8 +14,8 @@ This catalog lists implemented datasets, owners, and storage locations.
 
 ## Notes
 
-- Source A market/technical atomic factors currently include `adjusted_close_price`, `daily_return`, `dividend_per_share`, `momentum_1m`, and `volatility_20d`.
-- Financial atomic metrics (`book_value`, `shares_outstanding`, `total_debt`, `enterprise_ebitda`, `enterprise_revenue`) are persisted to `financial_observations`.
+- Source A market atomic factors currently include `adjusted_close_price`, `daily_return`, and `dividend_per_share`.
+- Financial atomic metrics (`book_value`, `total_shareholder_equity`, `shares_outstanding`, `total_debt`, `enterprise_ebitda`, `enterprise_revenue`) are persisted to `financial_observations`.
 - Source B alternative atomic factors include `news_sentiment_daily` and `news_article_count_daily`.
-- Final factor computation is handled by `modules/transform/factors.py` and persisted to `factor_observations`.
+- Final factor computation is handled by `modules/transform/factors.py` and persisted to `factor_observations` (including recomputed technical factors `momentum_1m` and `volatility_20d`).
 - MinIO paths intentionally include `run_date` for traceability and reproducibility.

@@ -127,9 +127,8 @@ def normalize_financial_records(records: List[Dict[str, Any]]) -> List[Dict[str,
         if not metric_name:
             continue
 
-        report_date = _to_iso_date(
-            rec.get("report_date") or rec.get("source_report_date") or rec.get("observation_date")
-        )
+        # Financial atomics must carry a real filing date; never infer it from observation/as-of date.
+        report_date = _to_iso_date(rec.get("report_date") or rec.get("source_report_date"))
         as_of = _to_iso_date(rec.get("as_of") or rec.get("observation_date"))
         metric_value = _to_float_or_none(
             rec.get("metric_value") if "metric_value" in rec else rec.get("value")

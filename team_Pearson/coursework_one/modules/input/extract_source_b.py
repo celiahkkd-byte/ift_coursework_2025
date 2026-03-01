@@ -24,6 +24,13 @@ from .symbol_filter import filter_symbols, symbol_allowed
 logger = logging.getLogger(__name__)
 
 ALPHA_VANTAGE_BASE_URL = "https://www.alphavantage.co/query"
+_ALPHA_KEY_PLACEHOLDERS = {
+    "",
+    "YOUR_KEY",
+    "YOUR_API_KEY_HERE",
+    "ALPHA_VANTAGE_API_KEY",
+    "REPLACE_WITH_YOUR_KEY",
+}
 # Throttle between API calls (seconds). Keep configurable for reproducibility.
 ALPHA_VANTAGE_THROTTLE_SECONDS = float(os.getenv("ALPHA_VANTAGE_THROTTLE_SECONDS", "1.0"))
 # Retry policy for transient/rate-limit responses.
@@ -86,17 +93,28 @@ def _filter_symbols_for_source_b(symbols: List[str], config: Optional[Dict[str, 
 
 
 def _resolve_alpha_key(config: Optional[Dict[str, Any]]) -> str:
+    def _sanitize(value: Any) -> str:
+        cleaned = str(value or "").strip()
+        if cleaned.upper() in _ALPHA_KEY_PLACEHOLDERS:
+            return ""
+        return cleaned
+
     api_cfg = (config or {}).get("api") or {}
-    value = (
-        os.getenv("ALPHA_VANTAGE_API_KEY")
-        or os.getenv("ALPHA_VANTAGE_KEY")
-        or api_cfg.get("alpha_vantage_key")
-        or ""
-    )
-    value = str(value).strip()
-    if value in {"", "YOUR_KEY", "YOUR_API_KEY_HERE"}:
-        return ""
-    return value
+    legacy_cfg = (config or {}).get("alpha_vantage") or {}
+    return _sanitize(os.getenv("ALPHA_VANTAGE_API_KEY")) or _sanitize(
+        os.getenv("ALPHA_VANTAGE_KEY")
+    ) or _sanitize(api_cfg.get("alpha_vantage_key") or legacy_cfg.get("api_key"))
+
+
+def _resolve_source_b_strict_time(config: Optional[Dict[str, Any]]) -> bool:
+    """Resolve strict timestamp policy for Source B article rows."""
+    source_cfg = ((config or {}).get("source_b") or {})
+    raw = source_cfg.get("strict_time", False)
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(raw)
 
 
 def _minio_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -118,7 +136,10 @@ def _minio_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 def _month_end_dates(run_date: str, backfill_years: int) -> List[date]:
     end = datetime.strptime(run_date, "%Y-%m-%d").date()
-    start_year = end.year - max(1, int(backfill_years)) + 1
+    years = int(backfill_years)
+    if years <= 0:
+        return [end]
+    start_year = end.year - years + 1
     months: List[date] = []
 
     cur = date(start_year, 1, 1)
@@ -309,12 +330,16 @@ def compute_sentiment_scores(feed: Iterable[Dict[str, Any]]) -> List[float]:
     return scores
 
 
-def _article_observation_date(article: Dict[str, Any], default_date: str) -> str:
-    """Resolve article date (YYYY-MM-DD) from Alpha Vantage payload."""
+def _article_observation_date(
+    article: Dict[str, Any], default_date: str, strict_time: bool = False
+) -> tuple[Optional[str], bool]:
+    """Resolve article date from payload; optionally drop rows with missing timestamp."""
     raw = str(article.get("time_published") or "").strip()
     if len(raw) >= 8 and raw[:8].isdigit():
-        return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
-    return default_date
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}", False
+    if strict_time:
+        return None, False
+    return default_date, True
 
 
 def ingest_source_b_raw(
@@ -367,6 +392,7 @@ def transform_source_b_features(
     symbols: List[str],
     run_date: str,
     frequency: str,
+    config: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Transform raw Source B payloads into daily sentiment/count atomic records."""
     if os.getenv("CW1_TEST_MODE") == "1":
@@ -396,9 +422,13 @@ def transform_source_b_features(
             )
         return out
 
+    strict_time = _resolve_source_b_strict_time(config)
     records: List[Dict[str, Any]] = []
     daily_sentiments: Dict[tuple[str, str], List[float]] = {}
     daily_counts: Dict[tuple[str, str], int] = {}
+    inferred_time_keys: set[tuple[str, str]] = set()
+    time_fallback_count = 0
+    time_drop_count = 0
     for payload in raw_payloads:
         symbol = str(payload.get("symbol") or "").strip()
         month_end = str(payload.get("month_end") or "").strip()
@@ -406,8 +436,16 @@ def transform_source_b_features(
         if not symbol or not month_end:
             continue
         for article in feed:
-            obs_date = _article_observation_date(article, month_end)
+            obs_date, inferred = _article_observation_date(
+                article, month_end, strict_time=strict_time
+            )
+            if not obs_date:
+                time_drop_count += 1
+                continue
             key = (symbol, obs_date)
+            if inferred:
+                time_fallback_count += 1
+                inferred_time_keys.add(key)
             daily_counts[key] = int(daily_counts.get(key, 0) + 1)
 
             title = str(article.get("title") or "")
@@ -421,6 +459,7 @@ def transform_source_b_features(
             daily_sentiments.setdefault(key, []).append(score)
 
     for (symbol, obs_date), scores in sorted(daily_sentiments.items()):
+        key = (symbol, obs_date)
         records.append(
             {
                 "symbol": symbol,
@@ -430,9 +469,11 @@ def transform_source_b_features(
                 "source": "extractor_b",
                 "metric_frequency": "daily",
                 "source_report_date": obs_date,
+                "timestamp_inferred": 1 if key in inferred_time_keys else 0,
             }
         )
     for (symbol, obs_date), count in sorted(daily_counts.items()):
+        key = (symbol, obs_date)
         records.append(
             {
                 "symbol": symbol,
@@ -442,7 +483,16 @@ def transform_source_b_features(
                 "source": "extractor_b",
                 "metric_frequency": "daily",
                 "source_report_date": obs_date,
+                "timestamp_inferred": 1 if key in inferred_time_keys else 0,
             }
+        )
+
+    if time_fallback_count or time_drop_count:
+        logger.warning(
+            "source_b_time_quality strict_time=%s fallback_to_month_end=%s dropped_missing_time=%s",
+            strict_time,
+            time_fallback_count,
+            time_drop_count,
         )
 
     return records
@@ -457,4 +507,4 @@ def extract_source_b(
 ) -> List[Dict[str, Any]]:
     """Run Source B end-to-end (ingest + transform)."""
     raw_payloads = ingest_source_b_raw(symbols, run_date, backfill_years, frequency, config=config)
-    return transform_source_b_features(raw_payloads, symbols, run_date, frequency)
+    return transform_source_b_features(raw_payloads, symbols, run_date, frequency, config=config)

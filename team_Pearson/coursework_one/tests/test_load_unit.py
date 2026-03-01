@@ -10,14 +10,24 @@ def test_load_curated_empty_returns_zero():
 
 def test_load_curated_dry_run_returns_record_count():
     rows = [
-        {"symbol": "AAPL", "observation_date": "2026-02-14", "factor_name": "x", "value": 1.0},
-        {"symbol": "MSFT", "observation_date": "2026-02-14", "factor_name": "x", "value": 2.0},
+        {
+            "symbol": "AAPL",
+            "observation_date": "2026-02-14",
+            "factor_name": "test_factor_load",
+            "value": 1.0,
+        },
+        {
+            "symbol": "MSFT",
+            "observation_date": "2026-02-14",
+            "factor_name": "test_factor_load",
+            "value": 2.0,
+        },
     ]
     assert load_curated(rows, dry_run=True) == 2
 
 
 def test_load_curated_missing_required_raises_before_db():
-    rows = [{"observation_date": "2026-02-14", "factor_name": "x", "value": 1.0}]
+    rows = [{"observation_date": "2026-02-14", "factor_name": "test_factor_load", "value": 1.0}]
     with pytest.raises(ValueError, match="Missing required columns"):
         load_curated(rows, dry_run=False)
 
@@ -94,7 +104,7 @@ def test_load_curated_executes_upsert(monkeypatch):
         {
             "symbol": "AAPL",
             "observation_date": "2026-02-14",
-            "factor_name": "x",
+            "factor_name": "test_factor_load",
             "value": 1.0,
             "source": "source_a",
             "frequency": "daily",
@@ -165,7 +175,7 @@ def test_load_curated_ignores_extra_columns_not_in_table(monkeypatch):
         {
             "symbol": "AAPL",
             "observation_date": "2026-02-14",
-            "factor_name": "x",
+            "factor_name": "test_factor_load",
             "factor_value": 1.0,
             "run_id": "abc",
         }
@@ -198,7 +208,14 @@ def test_load_curated_drops_invalid_date(monkeypatch):
     monkeypatch.setattr(sqlalchemy, "MetaData", lambda: object())
     monkeypatch.setattr(sqlalchemy, "Table", lambda *args, **kwargs: _FakeTable())
 
-    rows = [{"symbol": "AAPL", "observation_date": "NaT", "factor_name": "x", "factor_value": 1.0}]
+    rows = [
+        {
+            "symbol": "AAPL",
+            "observation_date": "NaT",
+            "factor_name": "test_factor_load",
+            "factor_value": 1.0,
+        }
+    ]
     assert load_curated(rows, dry_run=False) == 0
 
 
@@ -286,3 +303,134 @@ def test_load_financial_observations_executes_upsert(monkeypatch):
     assert out == 1
     assert executed["called"] is True
     assert executed["constraint"] == "uniq_financial_observation"
+
+
+def test_load_curated_reports_idempotency_stats_on_repeat_runs(monkeypatch):
+    class _FakeConn:
+        def execute(self, stmt):
+            _ = stmt
+            return None
+
+    class _Ctx:
+        def __enter__(self):
+            return _FakeConn()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _Engine:
+        def begin(self):
+            return _Ctx()
+
+    class _Excluded:
+        factor_value = "fv"
+        source = "src"
+        metric_frequency = "mf"
+        source_report_date = "srd"
+
+    class _Stmt:
+        excluded = _Excluded()
+
+        def values(self, records):
+            self.records = records
+            return self
+
+        def on_conflict_do_update(self, constraint, set_):
+            _ = (constraint, set_)
+            return self
+
+    monkeypatch.setattr(load_mod, "datetime", type("DT", (), {"now": staticmethod(lambda: "now")}))
+    monkeypatch.setitem(__import__("sys").modules, "pandas", __import__("pandas"))
+    import sqlalchemy
+    import sqlalchemy.dialects.postgresql as pg
+
+    class _Col:
+        def __init__(self, name):
+            self.name = name
+
+    class _FakeTable:
+        columns = [
+            _Col("symbol"),
+            _Col("observation_date"),
+            _Col("factor_name"),
+            _Col("factor_value"),
+            _Col("source"),
+            _Col("metric_frequency"),
+            _Col("source_report_date"),
+        ]
+
+    monkeypatch.setattr(load_mod, "get_db_engine", lambda: _Engine())
+    monkeypatch.setattr(sqlalchemy, "MetaData", lambda: object())
+    monkeypatch.setattr(sqlalchemy, "Table", lambda *args, **kwargs: _FakeTable())
+    monkeypatch.setattr(pg, "insert", lambda table: _Stmt())
+
+    seen = {"n": 0}
+
+    def _fake_count_existing(*args, **kwargs):
+        seen["n"] += 1
+        return 0 if seen["n"] == 1 else 1
+
+    monkeypatch.setattr(load_mod, "_count_existing_rows", _fake_count_existing)
+
+    rows = [
+        {
+            "symbol": "AAPL",
+            "observation_date": "2026-02-14",
+            "factor_name": "test_factor_load",
+            "factor_value": 1.0,
+            "source": "source_a",
+            "metric_frequency": "daily",
+            "source_report_date": "2026-02-14",
+        }
+    ]
+    stats_first = {}
+    stats_second = {}
+    assert load_curated(rows, dry_run=False, stats_out=stats_first) == 1
+    assert load_curated(rows, dry_run=False, stats_out=stats_second) == 1
+
+    assert stats_first["attempted"] == 1
+    assert stats_first["inserted"] == 1
+    assert stats_first["updated"] == 0
+    assert stats_first["invalid"] == 0
+
+    assert stats_second["attempted"] == 1
+    assert stats_second["inserted"] == 0
+    assert stats_second["updated"] == 1
+    assert stats_second["invalid"] == 0
+
+
+def test_load_curated_stats_counts_invalid_rows(monkeypatch):
+    class _Col:
+        def __init__(self, name):
+            self.name = name
+
+    class _FakeTable:
+        columns = [
+            _Col("symbol"),
+            _Col("observation_date"),
+            _Col("factor_name"),
+            _Col("factor_value"),
+        ]
+
+    class _Engine:
+        def begin(self):
+            raise AssertionError("should not hit DB execute when no valid rows")
+
+    monkeypatch.setitem(__import__("sys").modules, "pandas", __import__("pandas"))
+    import sqlalchemy
+
+    monkeypatch.setattr(load_mod, "get_db_engine", lambda: _Engine())
+    monkeypatch.setattr(sqlalchemy, "MetaData", lambda: object())
+    monkeypatch.setattr(sqlalchemy, "Table", lambda *args, **kwargs: _FakeTable())
+
+    stats = {}
+    rows = [
+        {
+            "symbol": "AAPL",
+            "observation_date": "NaT",
+            "factor_name": "test_factor_load",
+            "factor_value": 1.0,
+        }
+    ]
+    assert load_curated(rows, dry_run=False, stats_out=stats) == 0
+    assert stats == {"attempted": 1, "inserted": 0, "updated": 0, "invalid": 1}

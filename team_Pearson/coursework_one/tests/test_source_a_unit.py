@@ -44,6 +44,7 @@ def test_extract_fundamentals_from_yfinance_ticker():
             self.quarterly_balance_sheet = pd.DataFrame({"2025Q4": [123.0]}, index=["Total Debt"])
             self.info = {
                 "bookValue": 20.5,
+                "totalStockholderEquity": 999.0,
                 "sharesOutstanding": 1000000,
                 "ebitda": 5000000,
                 "totalRevenue": 15000000,
@@ -51,6 +52,7 @@ def test_extract_fundamentals_from_yfinance_ticker():
 
     out = source_a._extract_fundamentals_from_yfinance_ticker(_T())
     assert out["total_debt"] == 123.0
+    assert out["total_shareholder_equity"] == 999.0
     assert out["book_value"] == 20.5
     assert out["shares_outstanding"] == 1000000.0
     assert out["enterprise_ebitda"] == 5000000.0
@@ -70,6 +72,11 @@ def test_extract_fundamentals_unified_order_av_then_yf_fallback(monkeypatch):
         }
 
     monkeypatch.setattr(source_a, "_download_overview_alpha_vantage", _av_overview)
+    monkeypatch.setattr(
+        source_a,
+        "_download_balance_sheet_alpha_vantage",
+        lambda symbol, api_key: {"quarterlyReports": [{"totalShareholderEquity": "700.0"}]},
+    )
 
     class _Ticker:
         def __init__(self):
@@ -84,6 +91,7 @@ def test_extract_fundamentals_unified_order_av_then_yf_fallback(monkeypatch):
     # AV values kept when present
     assert out["book_value"] == 10.0
     assert out["enterprise_ebitda"] == 200.0
+    assert out["total_shareholder_equity"] == 700.0
     # Missing AV values filled by yfinance
     assert out["total_debt"] == 300.0
     assert out["shares_outstanding"] == 12345.0
@@ -104,13 +112,10 @@ def test_build_records_from_history_shape():
         history=history,
         run_date="2026-02-14",
         frequency="daily",
-        total_debt=500.0,
     )
-    assert len(out) == 7
+    assert len(out) == 6
     names = {r["factor_name"] for r in out}
-    assert {"adjusted_close_price", "daily_return", "dividend_per_share", "total_debt"}.issubset(
-        names
-    )
+    assert {"adjusted_close_price", "daily_return", "dividend_per_share"} == names
     dr = [r for r in out if r["factor_name"] == "daily_return"]
     assert len(dr) == 2
     assert dr[0]["value"] is None
@@ -124,15 +129,26 @@ def test_build_fundamental_records_shape():
         frequency="daily",
         source_label="alpha_vantage",
         fundamentals={
+            "total_debt": 300.0,
+            "total_shareholder_equity": 120.0,
             "book_value": 10.0,
             "shares_outstanding": 100.0,
             "enterprise_ebitda": 30.0,
             "enterprise_revenue": 200.0,
         },
     )
-    assert len(out) == 4
+    assert len(out) == 6
     names = {r["factor_name"] for r in out}
-    assert {"book_value", "shares_outstanding", "enterprise_ebitda", "enterprise_revenue"} == names
+    assert {
+        "total_debt",
+        "total_shareholder_equity",
+        "book_value",
+        "shares_outstanding",
+        "enterprise_ebitda",
+        "enterprise_revenue",
+    } == names
+    assert all(r["source_report_date"] is None for r in out)
+    assert all(r["observation_date"] is None for r in out)
 
 
 def test_extract_source_a_handles_symbol_failure(monkeypatch):
@@ -313,6 +329,21 @@ def test_resolve_alpha_key_from_config_when_env_missing(monkeypatch):
     assert key == "abc123"
 
 
+def test_resolve_alpha_key_with_source_env_overrides_conf(monkeypatch):
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "env_key")
+    key, source = source_a._resolve_alpha_key_with_source({"api": {"alpha_vantage_key": "conf_key"}})
+    assert key == "env_key"
+    assert source == "env"
+
+
+def test_resolve_alpha_key_with_source_conf_when_env_placeholder(monkeypatch):
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "YOUR_KEY")
+    monkeypatch.delenv("ALPHA_VANTAGE_KEY", raising=False)
+    key, source = source_a._resolve_alpha_key_with_source({"alpha_vantage": {"api_key": "conf_key"}})
+    assert key == "conf_key"
+    assert source == "conf"
+
+
 def test_select_source_order_default_and_with_fallback_disabled():
     assert source_a._select_source_order({}) == ["alpha_vantage", "yfinance"]
     out = source_a._select_source_order(
@@ -353,6 +384,30 @@ def test_history_from_payload_uses_observation_date():
     history = source_a._history_from_payload(payload)
     assert len(history) == 2
     assert "Close" in history.columns
+
+
+def test_validate_cache_payload_detects_mismatches():
+    payload = {
+        "symbol": "MSFT",
+        "run_date": "2026-02-13",
+        "rows": 3,
+        "history": [{"Date": "2026-02-13"}],
+    }
+    issues = source_a._validate_cache_payload(payload, symbol="AAPL", run_date="2026-02-14")
+    assert any("symbol_mismatch" in x for x in issues)
+    assert any("run_date_mismatch" in x for x in issues)
+    assert any("rows_mismatch" in x for x in issues)
+
+
+def test_validate_cache_payload_no_issue_for_consistent_payload():
+    payload = {
+        "symbol": "AAPL",
+        "run_date": "2026-02-14",
+        "rows": 2,
+        "history": [{"Date": "2026-02-13"}, {"Date": "2026-02-14"}],
+    }
+    issues = source_a._validate_cache_payload(payload, symbol="AAPL", run_date="2026-02-14")
+    assert issues == []
 
 
 def test_load_raw_from_minio_returns_none_when_config_incomplete():

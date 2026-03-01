@@ -38,12 +38,12 @@ Current atomic factors (input/ingest stage):
 - `adjusted_close_price`
 - `daily_return` (log return: `ln(price_t / price_t-1)`)
 - `dividend_per_share`
-- `momentum_1m`
-- `volatility_20d`
 - `news_sentiment_daily`
 - `news_article_count_daily`
 
 Current final factors (transform stage):
+- `momentum_1m`
+- `volatility_20d`
 - `dividend_yield`
 - `pb_ratio`
 - `debt_to_equity`
@@ -77,6 +77,7 @@ Constraints and indexes:
 Current financial atomic metrics:
 - `total_debt`
 - `book_value`
+- `total_shareholder_equity`
 - `shares_outstanding`
 - `enterprise_ebitda`
 - `enterprise_revenue`

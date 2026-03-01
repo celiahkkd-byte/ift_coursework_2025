@@ -16,6 +16,8 @@ From repository root:
 
 ```bash
 cd team_Pearson/coursework_one
+cp .env.example .env
+# set ALPHA_VANTAGE_API_KEY in .env (recommended)
 poetry install
 poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run
 ```
@@ -40,6 +42,11 @@ cd ift_coursework_2025
 docker compose up -d postgres_db mongo_db miniocw minio_client_cw
 ```
 
+Important MinIO behavior from teacher compose:
+- `minio_client_cw` includes `mc rm -r --force minio/csreport` during bootstrap.
+- Restarting `minio_client_cw` recreates bucket `csreport`, so previously written objects are removed.
+- If you see object count drop (for example back to `48 objects`), first check whether `minio_client_cw` restarted.
+
 ## Standard run sequence (copy/paste)
 Run exactly in this order:
 
@@ -50,6 +57,8 @@ docker compose up -d postgres_db mongo_db miniocw minio_client_cw
 
 # 2) Run app and tests in coursework_one
 cd team_Pearson/coursework_one
+cp .env.example .env
+# set ALPHA_VANTAGE_API_KEY in .env (recommended)
 poetry install
 poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run
 poetry run pytest tests -q
@@ -72,6 +81,15 @@ poetry run python scripts/init_db.py
 This project-level initializer does two steps:
 1. Applies `sql/init.sql` into running `postgres_db_cw` via `docker exec`.
 2. Seeds `systematic_equity.company_static` from `000.Database/SQL/Equity.db`.
+
+Data validation (date-type consistent checks):
+
+```bash
+cd team_Pearson/coursework_one
+poetry run python scripts/validate_pipeline_data.py --tolerance 1e-6
+```
+
+The validator normalizes date columns on both sides to `date` type before merge/filter checks.
 
 
 Services and local ports from current compose:
@@ -159,12 +177,52 @@ MinIO bucket initialization behavior from compose:
 - `minio_client_cw` runs `mc rm -r --force minio/csreport` then `mc mb minio/csreport`.
 - This means bucket `csreport` is recreated by compose bootstrap (not manually created in app setup docs).
 
+Optional local-only safety override (do not edit teacher compose):
+- Use repo root `docker-compose.override.yml` to keep bucket contents by default:
+  - `minio_client_cw`: remove auto-delete, keep `mc mb --ignore-existing`.
+  - `miniocw`: mount `./minio-data:/data` for persistence across container rebuilds.
+  - `minio_reset_cw` (manual profile): explicit reset service when you really need clean state.
+- Manual reset command:
+
+```bash
+cd /Users/celiawong/Desktop/ift_coursework_2025
+docker compose --profile manual-reset run --rm minio_reset_cw
+```
+
+MinIO client compatibility note (do not modify teacher `docker-compose.yml`):
+- Some environments use a newer `minio/mc` where legacy `mc config host add` is no longer recognized.
+- If you see `mc: <ERROR> 'config' is not a recognized command`, use this one-off compatible reset command:
+
+```bash
+cd /Users/celiawong/Desktop/ift_coursework_2025
+docker run --rm --entrypoint /bin/sh --network ift_coursework_2025_iceberg_net minio/mc -c \
+"mc alias set minio http://miniocw:9000 ift_bigdata minio_password && \
+mc rm -r --force minio/csreport || true && \
+mc mb --ignore-existing minio/csreport && \
+mc anonymous set public minio/csreport"
+```
+
 Configuration precedence:
-- Environment variables are the source of truth.
-- `config/conf.yaml` provides fallback defaults when env vars are missing.
+- `Main.py` auto-loads local `.env` before reading config.
+- Unified precedence for pipeline behavior parameters (`frequency`, `backfill_years`, `company_limit`, `enabled_extractors`):
+  1. CLI arguments
+  2. ENV (for example `PIPELINE_FREQUENCY`)
+  3. `config/conf.yaml`
+  4. built-in defaults
+- Runtime connection/secrets should come from ENV (`.env` / deployment env vars).
+- Alpha Vantage key resolver order:
+  1. `ALPHA_VANTAGE_API_KEY`
+  2. `ALPHA_VANTAGE_KEY`
+  3. (legacy compatibility only) `config/conf.yaml` key field if present
+- Placeholder values (`YOUR_KEY`, `YOUR_API_KEY_HERE`, empty) are treated as missing.
 
 Environment template for local runtime:
 - `team_Pearson/coursework_one/.env.example`
+
+Poetry metadata warning note:
+- `poetry check` may emit deprecation warnings for `tool.poetry.*` metadata.
+- This does not affect current execution (`poetry install`, pipeline run, tests, or grading workflow).
+- For coursework stability, we keep the current format now and can migrate to PEP 621 `[project]` metadata in a future maintenance pass.
 
 If needed, create your local env file:
 
@@ -191,6 +249,7 @@ Default is:
 pipeline:
   enabled_extractors:
     - source_a
+    - source_b
 ```
 
 CLI can override config:
@@ -218,6 +277,8 @@ Implemented technical factors (daily):
 - `momentum_1m`: `(Price_t / Price_{t-20}) - 1`
 - `volatility_20d`: rolling 20-day standard deviation of daily returns
 - Rule: if history has fewer than 20 trading days, these observations are dropped.
+- `debt_to_equity`: daily as-of aligned to the latest available quarterly filing (stepwise series with forward-fill under a staleness limit).
+  - Quarterly update cadence for financial atomics; daily as-of output for backtest alignment.
 
 ## Current status
 Current delivery focus:
@@ -249,7 +310,14 @@ poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run --en
 1. `ingest_source_b_raw(...)`: raw collection from Alpha Vantage and lake storage in MinIO.
 2. `transform_source_b_features(...)`: converts raw payloads into alternative atomic records (`news_sentiment_daily`, `news_article_count_daily`).
 
-Final monthly factors `sentiment_30d_avg` and `article_count_30d` are computed in `modules/transform/factors.py` from atomic records (daily reduction + date fill + rolling 30D window).
+Extractor B timestamp policy:
+```yaml
+source_b:
+  strict_time: false   # default: fallback missing/invalid article time to month_end and mark timestamp_inferred
+                       # true: drop rows with missing/invalid time_published
+```
+
+Final daily factors `sentiment_30d_avg` and `article_count_30d` are computed in `modules/transform/factors.py` from atomic records (daily reduction + calendar-day fill + rolling 30D window).
 
 ## Optional Search Service (MongoDB)
 This project now supports an optional, rebuildable MongoDB news-search index:
@@ -358,8 +426,17 @@ poetry run pytest -q
 # coverage threshold is enforced by pytest config (>=80%)
 poetry run pytest
 poetry run bandit -r modules Main.py
+# safety check is used here because safety scan requires interactive login in some CLI environments
 VENV_PATH=$(poetry env info -p) && HOME=/tmp "$VENV_PATH/bin/safety" check -r poetry.lock
 cd docs/sphinx && poetry run make html
+```
+
+Bandit / Safety quick run:
+
+```bash
+cd team_Pearson/coursework_one
+poetry run bandit -r modules Main.py
+VENV_PATH=$(poetry env info -p) && HOME=/tmp "$VENV_PATH/bin/safety" check -r poetry.lock
 ```
 
 Docs entry point after build:

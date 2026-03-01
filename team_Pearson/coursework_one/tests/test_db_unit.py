@@ -16,11 +16,10 @@ def test_universe_test_mode_count(monkeypatch):
     assert get_company_count() >= 5
 
 
-def test_universe_minimum_limit_in_test_mode(monkeypatch):
+def test_universe_unlimited_limit_in_test_mode(monkeypatch):
     monkeypatch.setenv("CW1_TEST_MODE", "1")
     symbols = get_company_universe(0)
-    assert len(symbols) == 1
-    assert symbols[0] == "AAPL"
+    assert symbols == ["AAPL", "MSFT", "GOOG", "AMZN", "TSLA"]
 
 
 def test_db_engine_success(monkeypatch):
@@ -140,3 +139,41 @@ def test_universe_country_allowlist_passes_filter_params(monkeypatch):
     assert out == ["AAPL"]
     assert captured["params"]["country_0"] == "US"
     assert captured["params"]["country_1"] == "GB"
+
+
+def test_universe_country_allowlist_string_is_split_and_normalized(monkeypatch):
+    monkeypatch.delenv("CW1_TEST_MODE", raising=False)
+
+    captured = {"params": None}
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params=None):
+            captured["params"] = params
+
+            class _R:
+                def fetchall(self_non):
+                    return [("AAPL",)]
+
+            return _R()
+
+    class _Engine2:
+        def connect(self):
+            return _Conn()
+
+    monkeypatch.setattr(universe, "get_db_engine", lambda: _Engine2())
+    out = universe.get_company_universe(5, country_allowlist="US, GB, ,ca")
+    assert out == ["AAPL"]
+    assert captured["params"]["country_0"] == "US"
+    assert captured["params"]["country_1"] == "GB"
+    assert captured["params"]["country_2"] == "CA"
+
+
+def test_universe_country_allowlist_invalid_type_raises():
+    with pytest.raises(ValueError, match="Expected list or comma-separated string"):
+        universe.get_company_universe(5, country_allowlist=123)  # type: ignore[arg-type]

@@ -21,7 +21,7 @@ def write_pipeline_run_start(
     started_at: str,
     frequency: str,
     backfill_years: int,
-    company_limit: int,
+    company_limit: Optional[int],
     enabled_extractors: str,
     notes: str = "",
 ) -> None:
@@ -56,7 +56,7 @@ def write_pipeline_run_start(
         "started_at": started_at,
         "frequency": frequency,
         "backfill_years": int(backfill_years),
-        "company_limit": int(company_limit),
+        "company_limit": company_limit,
         "enabled_extractors": enabled_extractors,
         "notes": notes,
     }

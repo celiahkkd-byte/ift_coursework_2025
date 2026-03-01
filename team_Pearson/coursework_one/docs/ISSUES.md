@@ -14,7 +14,7 @@ This file tracks current actionable issues only. Historical role assignment text
 
 - [ ] Expand/validate end-to-end tests for final factors against fixed fixtures (especially `sentiment_30d_avg`).
 - [ ] Add more explicit Sphinx API pages for transform and audit modules.
-- [x] Persist `article_count_30d` as a monthly transformed factor in `systematic_equity.factor_observations`.
+- [x] Persist `article_count_30d` as a daily transformed factor in `systematic_equity.factor_observations`.
 
 ## Constraints
 

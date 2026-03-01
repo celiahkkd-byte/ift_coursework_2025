@@ -56,9 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--frequency",
-        required=True,
+        required=False,
+        default=None,
         choices=sorted(ALLOWED_FREQUENCIES),
-        help="Data frequency for the pipeline run.",
+        help="Data frequency for the pipeline run (default from config).",
     )
     parser.add_argument(
         "--backfill-years",

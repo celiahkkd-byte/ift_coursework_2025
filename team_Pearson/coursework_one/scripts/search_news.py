@@ -33,16 +33,28 @@ def _read_env_or_cfg(env_key: str, cfg: dict[str, Any], cfg_key: str, default: s
     return str(raw).strip()
 
 
-def _build_collection(mongo_cfg: dict[str, Any], collection_name: str):
+def _resolve_mongo_db(cli_mongo_db: str, mongo_cfg: dict[str, Any]) -> str:
+    cli_value = str(cli_mongo_db or "").strip()
+    if cli_value:
+        return cli_value
+    env_value = str(os.getenv("MONGO_DB", "")).strip()
+    if env_value:
+        return env_value
+    cfg_value = str(mongo_cfg.get("database", "")).strip()
+    if cfg_value:
+        return cfg_value
+    return "ift_cw"
+
+
+def _build_collection(mongo_cfg: dict[str, Any], collection_name: str, mongo_db: str):
     host = _read_env_or_cfg("MONGO_HOST", mongo_cfg, "host", "localhost")
     port = int(_read_env_or_cfg("MONGO_PORT", mongo_cfg, "port", "27017"))
-    database = _read_env_or_cfg("MONGO_DB", mongo_cfg, "database", "admin")
     uri = os.getenv("MONGO_URI", "").strip()
     if uri:
-        client = MongoClient(uri)
+        client = MongoClient(uri, serverSelectionTimeoutMS=5000)
     else:
-        client = MongoClient(host=host, port=port)
-    return client[database][collection_name]
+        client = MongoClient(host=host, port=port, serverSelectionTimeoutMS=5000)
+    return client[mongo_db][collection_name]
 
 
 def _parse_date_floor(value: str) -> datetime:
@@ -76,13 +88,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--from", dest="from_date", default="", help="Inclusive date/time.")
     parser.add_argument("--to", dest="to_date", default="", help="Exclusive date/time.")
     parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--mongo-db", default="", help="Mongo database name.")
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
     mongo_cfg = _resolve_mongo_cfg(args.config)
-    coll = _build_collection(mongo_cfg, args.collection)
+    mongo_db = _resolve_mongo_db(args.mongo_db, mongo_cfg)
+    coll = _build_collection(mongo_cfg, args.collection, mongo_db)
 
     query: dict[str, Any] = {}
     sort_spec: list[tuple[str, Any]] = [("time_published", -1)]
