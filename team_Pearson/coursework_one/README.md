@@ -173,6 +173,36 @@ Docker-aligned defaults used by this project (single source: repo root `docker-c
 - `MINIO_SECRET_KEY=minio_password`
 - `MINIO_BUCKET=csreport`
 
+## Dynamic universe add/remove (without editing teacher DB files)
+This project supports dynamic universe overrides in your own schema table:
+- `systematic_equity.company_universe_overrides`
+- columns: `symbol`, `action(include|exclude)`, `is_active`, `reason`, `updated_at`
+
+`get_company_universe()` behavior:
+- base universe from teacher table (`company_static` / fallback `equity_static`)
+- apply active `exclude` overrides (remove from run universe)
+- apply active `include` overrides (add into run universe)
+
+Manage overrides:
+```bash
+cd team_Pearson/coursework_one
+
+# add a symbol into universe
+poetry run python scripts/manage_universe_overrides.py set --symbol NVDA --action include --reason "manual include"
+
+# exclude a symbol from universe
+poetry run python scripts/manage_universe_overrides.py set --symbol AAL --action exclude --reason "temporary removal"
+
+# disable an override without deleting it
+poetry run python scripts/manage_universe_overrides.py set --symbol AAL --action exclude --is-active false --reason "reactivated"
+
+# list overrides
+poetry run python scripts/manage_universe_overrides.py list
+
+# remove an override row
+poetry run python scripts/manage_universe_overrides.py remove --symbol AAL
+```
+
 MinIO bucket initialization behavior from compose:
 - `minio_client_cw` runs `mc rm -r --force minio/csreport` then `mc mb minio/csreport`.
 - This means bucket `csreport` is recreated by compose bootstrap (not manually created in app setup docs).
@@ -233,11 +263,16 @@ cp .env.example .env
 
 ## CLI parameters
 - `--run-date` (required): decision date in `YYYY-MM-DD`
-- `--frequency` (required): `daily|weekly|monthly|quarterly|annual`
+- `--frequency` (required): schedule/output mode `daily|weekly|monthly|quarterly|annual`
 - `--backfill-years` (optional): history length, default from config
 - `--company-limit` (optional): universe size cap, default from config
 - `--dry-run` (optional): run pipeline without final load
 - `--enabled-extractors` (optional): comma-separated extractor list, e.g. `source_a` or `source_a,source_b`
+
+Frequency semantics (unified):
+- Atomic ingestion frequency is fixed to daily collection checks (market/news daily, financial upsert by `report_date` when new filings appear).
+- `--frequency` controls scheduling window labels and derived-factor output sampling points.
+- Financial raw cadence remains encoded by `financial_observations.period_type` (`quarterly`, etc.) and is not controlled by `--frequency`.
 
 ## Extractor switches
 Default extractor selection is configured in:
@@ -295,6 +330,52 @@ poetry run python Main.py --run-date 2026-12-31 --frequency annual --dry-run
 poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run --enabled-extractors source_a,source_b
 ```
 
+## Auto trigger (daily only)
+Use one scheduler entry per day. Default wrapper behavior runs `daily` only:
+
+```bash
+cd team_Pearson/coursework_one
+poetry run python scripts/run_scheduled_pipeline.py
+```
+
+Trigger rules:
+- every day: run `daily` only
+- `monthly` / `quarterly`: manual replay only via `--only`
+
+Dry-run plan check:
+```bash
+cd team_Pearson/coursework_one
+poetry run python scripts/run_scheduled_pipeline.py --plan-only
+```
+
+Force specific frequencies for manual replay (not part of cron default):
+```bash
+cd team_Pearson/coursework_one
+poetry run python scripts/run_scheduled_pipeline.py --run-date 2026-04-01 --only daily,monthly,quarterly
+```
+
+Install auto-update cron (run every day at 06:05 host local time by default):
+```bash
+cd team_Pearson/coursework_one
+./scripts/install_auto_update_cron.sh
+```
+
+Custom schedule example:
+```bash
+cd team_Pearson/coursework_one
+CRON_SCHEDULE="30 2 * * *" ./scripts/install_auto_update_cron.sh
+```
+
+Timezone note:
+- `cron` uses the machine local timezone by default (not UTC).
+- On DST transitions (for example London switching between GMT/BST), wall-clock run time shifts relative to UTC.
+
+Remove auto-update cron:
+```bash
+cd team_Pearson/coursework_one
+./scripts/uninstall_auto_update_cron.sh
+```
+
 ## Integration contracts (for roles 3/5/6/7/8)
 - `modules.db.get_company_universe(company_limit: int, country_allowlist: list[str] | None = None) -> list[str]`
 - `modules.input.extract_source_a(symbols, run_date, backfill_years, frequency, config=None) -> list[dict]`
@@ -309,6 +390,13 @@ poetry run python Main.py --run-date 2026-02-14 --frequency daily --dry-run --en
 `extract_source_b` is intentionally pluggable and split into two stages:
 1. `ingest_source_b_raw(...)`: raw collection from Alpha Vantage and lake storage in MinIO.
 2. `transform_source_b_features(...)`: converts raw payloads into alternative atomic records (`news_sentiment_daily`, `news_article_count_daily`).
+
+Sentiment backend dependency (default):
+- `pysentiment2` (LM lexicon) is the default sentiment backend for Source B.
+- It is declared in `pyproject.toml` and installed via `poetry install`.
+- Runtime logs indicate the active backend:
+  - `source_b sentiment_backend=lm_lexicon` (expected default)
+  - `source_b sentiment_backend=fallback_lexicon` (only when `pysentiment2` is unavailable)
 
 Extractor B timestamp policy:
 ```yaml

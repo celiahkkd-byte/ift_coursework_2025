@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from .symbol_filter import filter_symbols, symbol_allowed
+from .symbol_filter import filter_symbols
 
 logger = logging.getLogger(__name__)
 
@@ -64,17 +64,28 @@ _FALLBACK_NEGATIVE = {
 }
 
 _LM_ANALYZER = None
+_SENTIMENT_BACKEND_LOGGED = False
 
 
-def _source_b_symbol_allowed(symbol: str, config: Optional[Dict[str, Any]]) -> bool:
-    """Decide whether a symbol should be processed by Source B."""
-    return symbol_allowed(
-        symbol=symbol,
-        config=config,
-        section=None,
-        default_skip_suffix=True,
-        default_regex=r"^[A-Z0-9]+$",
-    )
+def _ensure_sentiment_backend() -> None:
+    """Initialize sentiment backend once and log which backend is active."""
+    global _LM_ANALYZER, _SENTIMENT_BACKEND_LOGGED
+    if _LM_ANALYZER is None:
+        try:
+            import pysentiment2 as ps  # type: ignore
+
+            _LM_ANALYZER = ps.LM()
+        except Exception:
+            _LM_ANALYZER = False
+
+    if not _SENTIMENT_BACKEND_LOGGED:
+        if _LM_ANALYZER:
+            logger.info("source_b sentiment_backend=lm_lexicon")
+        else:
+            logger.warning(
+                "source_b sentiment_backend=fallback_lexicon " "reason=pysentiment2_unavailable"
+            )
+        _SENTIMENT_BACKEND_LOGGED = True
 
 
 def _filter_symbols_for_source_b(symbols: List[str], config: Optional[Dict[str, Any]]) -> List[str]:
@@ -296,15 +307,7 @@ def _tokenize_text(text: str) -> List[str]:
 
 
 def _score_text(text: str) -> float:
-    global _LM_ANALYZER
-
-    if _LM_ANALYZER is None:
-        try:
-            import pysentiment2 as ps  # type: ignore
-
-            _LM_ANALYZER = ps.LM()
-        except Exception:
-            _LM_ANALYZER = False
+    _ensure_sentiment_backend()
 
     if _LM_ANALYZER:
         tokens = _LM_ANALYZER.tokenize(text)

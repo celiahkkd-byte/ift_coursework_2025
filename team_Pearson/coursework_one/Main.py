@@ -344,7 +344,7 @@ def collect_raw_records(
                     "observation_date": run_date,
                     "factor_name": "test_factor",
                     "factor_value": 1.0,
-                    "source": "test_mode",
+                    "source": "alpha_vantage",
                     "metric_frequency": frequency,
                     "source_report_date": run_date,
                 }
@@ -572,10 +572,13 @@ def run_pipeline_stage(ctx: RunContext, state: PipelineState) -> None:
         universe_cfg = ctx.cfg.get("universe") or {}
         country_allowlist = universe_cfg.get("country_allowlist")
         universe = get_company_universe(ctx.company_limit, country_allowlist=country_allowlist)
+        symbols_preview = universe[:20]
         logger.info(
-            "stage_ok run_id=%s stage=universe symbols=%s",
+            "stage_ok run_id=%s stage=universe symbols_count=%s symbols_list=%s%s",
             ctx.run_id,
             len(universe),
+            symbols_preview,
+            " ...(truncated)" if len(universe) > len(symbols_preview) else "",
         )
         state.stages_ok += 1
         _log_stage_event(
@@ -588,10 +591,16 @@ def run_pipeline_stage(ctx: RunContext, state: PipelineState) -> None:
 
         t0 = time.monotonic()
         extractor_errors: List[Dict[str, str]] = []
+        logger.info(
+            "extract_config run_id=%s atomic_collection_frequency=daily "
+            "output_sampling_frequency=%s",
+            ctx.run_id,
+            ctx.frequency,
+        )
         raw = collect_raw_records(
             universe,
             ctx.args.run_date,
-            ctx.frequency,
+            "daily",
             ctx.backfill_years,
             enabled_extractors=ctx.enabled_extractors,
             config=ctx.cfg,
@@ -738,6 +747,7 @@ def run_pipeline_stage(ctx: RunContext, state: PipelineState) -> None:
             final_factor_rows = build_and_load_final_factors(
                 run_date=ctx.args.run_date,
                 backfill_years=ctx.backfill_years,
+                output_frequency=ctx.frequency,
                 symbols=universe,
                 dry_run=ctx.args.dry_run,
             )

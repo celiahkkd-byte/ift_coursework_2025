@@ -220,6 +220,135 @@ def _download_balance_sheet_alpha_vantage(symbol: str, api_key: str) -> Dict[str
     return payload
 
 
+def _download_income_statement_alpha_vantage(symbol: str, api_key: str) -> Dict[str, Any]:
+    """Fetch Alpha Vantage INCOME_STATEMENT payload for EBITDA/revenue fields."""
+    params = {
+        "function": "INCOME_STATEMENT",
+        "symbol": symbol,
+        "apikey": api_key,
+    }
+    response = requests.get(ALPHA_VANTAGE_BASE_URL, params=params, timeout=(5, 30))
+    response.raise_for_status()
+    payload = response.json()
+    if "Error Message" in payload:
+        raise RuntimeError(payload["Error Message"])
+    if "Note" in payload:
+        raise RuntimeError(payload["Note"])
+    if not isinstance(payload, dict):
+        raise RuntimeError("Alpha Vantage INCOME_STATEMENT returned invalid payload")
+    return payload
+
+
+def _parse_iso_date(value: Any) -> Optional[datetime]:
+    raw = str(value or "").strip()[:10]
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _in_backfill_window(report_date: Any, run_date: str, backfill_years: int) -> bool:
+    report_dt = _parse_iso_date(report_date)
+    run_dt = _parse_iso_date(run_date)
+    if report_dt is None or run_dt is None:
+        return False
+    lookback_days = max(0, int(round(365.25 * max(int(backfill_years), 0))))
+    start_dt = run_dt - pd.Timedelta(days=lookback_days)
+    return start_dt <= report_dt <= run_dt
+
+
+def _build_quarterly_fundamentals_from_av_balance_sheet(
+    balance_sheet: Dict[str, Any],
+    *,
+    run_date: str,
+    backfill_years: int,
+    currency: Optional[str],
+    metric_definition: str,
+    income_by_date: Optional[Dict[str, Dict[str, Optional[float]]]] = None,
+    snapshot_ebitda: Optional[float] = None,
+    snapshot_revenue: Optional[float] = None,
+) -> List[Dict[str, Any]]:
+    quarterly = balance_sheet.get("quarterlyReports") or []
+    if not isinstance(quarterly, list):
+        return []
+
+    out: List[Dict[str, Any]] = []
+    income_lookup = income_by_date or {}
+    for report in quarterly:
+        if not isinstance(report, dict):
+            continue
+        report_date = str(report.get("fiscalDateEnding") or "").strip()[:10] or None
+        if not report_date or not _in_backfill_window(report_date, run_date, backfill_years):
+            continue
+
+        total_equity = _to_float_or_none(
+            report.get("totalShareholderEquity") or report.get("totalStockholdersEquity")
+        )
+        shares_outstanding = _to_float_or_none(report.get("commonStockSharesOutstanding"))
+        book_value = None
+        if total_equity is not None and shares_outstanding is not None and shares_outstanding > 0:
+            book_value = total_equity / shares_outstanding
+
+        income_fields = income_lookup.get(report_date, {})
+        out.append(
+            {
+                "report_date": report_date,
+                "total_debt": _to_float_or_none(
+                    report.get("totalDebt")
+                    or report.get("shortLongTermDebtTotal")
+                    or report.get("longTermDebt")
+                ),
+                "total_shareholder_equity": total_equity,
+                "book_value": book_value,
+                "shares_outstanding": shares_outstanding,
+                "enterprise_ebitda": income_fields.get("enterprise_ebitda"),
+                "enterprise_revenue": income_fields.get("enterprise_revenue"),
+                "currency": currency,
+                "metric_definition": metric_definition,
+            }
+        )
+
+    out.sort(key=lambda x: str(x.get("report_date") or ""))
+    if out:
+        latest_report_date = str(out[-1].get("report_date") or "")
+        for row in out:
+            if str(row.get("report_date") or "") != latest_report_date:
+                continue
+            if row.get("enterprise_ebitda") is None and snapshot_ebitda is not None:
+                row["enterprise_ebitda"] = snapshot_ebitda
+            if row.get("enterprise_revenue") is None and snapshot_revenue is not None:
+                row["enterprise_revenue"] = snapshot_revenue
+    return out
+
+
+def _build_quarterly_income_map_from_av_income_statement(
+    income_statement: Dict[str, Any],
+    *,
+    run_date: str,
+    backfill_years: int,
+) -> Dict[str, Dict[str, Optional[float]]]:
+    quarterly = income_statement.get("quarterlyReports") or []
+    if not isinstance(quarterly, list):
+        return {}
+
+    out: Dict[str, Dict[str, Optional[float]]] = {}
+    for report in quarterly:
+        if not isinstance(report, dict):
+            continue
+        report_date = str(report.get("fiscalDateEnding") or "").strip()[:10] or None
+        if not report_date or not _in_backfill_window(report_date, run_date, backfill_years):
+            continue
+        out[report_date] = {
+            "enterprise_ebitda": _to_float_or_none(
+                report.get("ebitda") or report.get("ebit") or report.get("operatingIncome")
+            ),
+            "enterprise_revenue": _to_float_or_none(report.get("totalRevenue")),
+        }
+    return out
+
+
 def _extract_fundamentals_from_yfinance_ticker(ticker: Any) -> Dict[str, Any]:
     """Extract fundamental snapshot fields from yfinance ticker object."""
     info = {}
@@ -271,6 +400,8 @@ def _extract_fundamentals(
     symbol: str,
     ticker: Any,
     config: Dict[str, Any],
+    run_date: Optional[str] = None,
+    backfill_years: int = 1,
 ) -> Dict[str, Any]:
     """Extract fundamentals with unified provider order: Alpha Vantage -> yfinance fallback."""
     out: Dict[str, Any] = {
@@ -283,6 +414,7 @@ def _extract_fundamentals(
         "report_date": None,
         "currency": None,
         "metric_definition": "provider_reported",
+        "quarterly_fundamentals": [],
     }
 
     # 1) Alpha Vantage first
@@ -297,8 +429,33 @@ def _extract_fundamentals(
             out["enterprise_revenue"] = _to_float_or_none(overview.get("RevenueTTM"))
             out["report_date"] = str(overview.get("LatestQuarter") or "").strip()[:10] or None
             out["currency"] = str(overview.get("Currency") or "").strip().upper() or None
+            income_by_date: Dict[str, Dict[str, Optional[float]]] = {}
+            try:
+                income_statement = _download_income_statement_alpha_vantage(symbol, api_key)
+                income_by_date = _build_quarterly_income_map_from_av_income_statement(
+                    income_statement,
+                    run_date=str(run_date or ""),
+                    backfill_years=backfill_years,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "alpha_vantage_income_statement_failed symbol=%s reason=%r; "
+                    "falling back to overview snapshot for enterprise metrics",
+                    symbol,
+                    exc,
+                )
             try:
                 balance_sheet = _download_balance_sheet_alpha_vantage(symbol, api_key)
+                out["quarterly_fundamentals"] = _build_quarterly_fundamentals_from_av_balance_sheet(
+                    balance_sheet,
+                    run_date=str(run_date or ""),
+                    backfill_years=backfill_years,
+                    currency=out["currency"],
+                    metric_definition=str(out["metric_definition"] or "provider_reported"),
+                    income_by_date=income_by_date,
+                    snapshot_ebitda=out["enterprise_ebitda"],
+                    snapshot_revenue=out["enterprise_revenue"],
+                )
                 quarterly = balance_sheet.get("quarterlyReports") or []
                 if quarterly:
                     latest = quarterly[0] or {}
@@ -497,7 +654,7 @@ def _build_records_from_history(
     history: Any,
     run_date: str,
     frequency: str,
-    source_label: str = "source_a",
+    source_label: str = "alpha_vantage",
 ) -> List[Dict[str, Any]]:
     records: List[Dict[str, Any]] = []
     prev_close: Optional[float] = None
@@ -555,6 +712,7 @@ def _build_fundamental_records(
     frequency: str,
     source_label: str,
     fundamentals: Dict[str, Any],
+    backfill_years: int = 1,
 ) -> List[Dict[str, Any]]:
     """Build atomic fundamental factor records at run_date snapshot."""
     field_map = {
@@ -562,33 +720,56 @@ def _build_fundamental_records(
         "total_shareholder_equity": ("total_shareholder_equity", "quarterly"),
         "book_value": ("book_value", "quarterly"),
         "shares_outstanding": ("shares_outstanding", "quarterly"),
-        "enterprise_ebitda": ("enterprise_ebitda", "ttm"),
-        "enterprise_revenue": ("enterprise_revenue", "ttm"),
+        "enterprise_ebitda": ("enterprise_ebitda", "quarterly"),
+        "enterprise_revenue": ("enterprise_revenue", "quarterly"),
     }
     out: List[Dict[str, Any]] = []
-    report_date_raw = fundamentals.get("report_date")
-    report_date = str(report_date_raw or "").strip()[:10] or None
-    currency = str(fundamentals.get("currency") or "UNKNOWN").strip().upper() or "UNKNOWN"
-    metric_definition = (
-        str(fundamentals.get("metric_definition") or "provider_reported").strip().lower()
-    )
-    for key, (factor_name, period_type) in field_map.items():
-        out.append(
-            {
-                "symbol": symbol,
-                "observation_date": report_date,
-                "factor_name": factor_name,
-                "value": fundamentals.get(key),
-                "source": source_label,
-                "frequency": frequency,
-                "source_report_date": report_date,
-                "report_date": report_date,
-                "as_of": run_date,
-                "period_type": period_type,
-                "currency": currency,
-                "metric_definition": metric_definition,
-            }
+    quarterly_fundamentals = fundamentals.get("quarterly_fundamentals") or []
+
+    def _append_from_row(row: Dict[str, Any], report_date: Optional[str]) -> None:
+        currency = (
+            str(row.get("currency") or fundamentals.get("currency") or "UNKNOWN").strip().upper()
         )
+        currency = currency or "UNKNOWN"
+        metric_definition = (
+            str(
+                row.get("metric_definition")
+                or fundamentals.get("metric_definition")
+                or "provider_reported"
+            )
+            .strip()
+            .lower()
+        )
+        for key, (factor_name, period_type) in field_map.items():
+            out.append(
+                {
+                    "symbol": symbol,
+                    "observation_date": report_date,
+                    "factor_name": factor_name,
+                    "value": row.get(key),
+                    "source": source_label,
+                    "frequency": frequency,
+                    "source_report_date": report_date,
+                    "report_date": report_date,
+                    "as_of": run_date,
+                    "period_type": period_type,
+                    "currency": currency,
+                    "metric_definition": metric_definition,
+                }
+            )
+
+    if isinstance(quarterly_fundamentals, list) and quarterly_fundamentals:
+        for q_row in quarterly_fundamentals:
+            if not isinstance(q_row, dict):
+                continue
+            report_date = str(q_row.get("report_date") or "").strip()[:10] or None
+            if report_date and _in_backfill_window(report_date, run_date, backfill_years):
+                _append_from_row(q_row, report_date)
+
+    if not out:
+        report_date_raw = fundamentals.get("report_date")
+        report_date = str(report_date_raw or "").strip()[:10] or None
+        _append_from_row(fundamentals, report_date)
     return out
 
 
@@ -770,7 +951,7 @@ def extract_source_a(
                 "observation_date": run_date,
                 "factor_name": "source_a_metric",
                 "value": 1.0,
-                "source": "source_a_test",
+                "source": "alpha_vantage",
                 "frequency": frequency,
             }
             for symbol in symbols
@@ -822,6 +1003,8 @@ def extract_source_a(
                     symbol=symbol,
                     ticker=ticker,
                     config=cfg,
+                    run_date=run_date,
+                    backfill_years=backfill_years,
                 )
                 total_debt = fundamentals.get("total_debt")
                 payload = {
@@ -861,6 +1044,7 @@ def extract_source_a(
                     frequency=frequency,
                     source_label=provider_source,
                     fundamentals=fundamentals,
+                    backfill_years=backfill_years,
                 )
             )
             records.extend(symbol_records)

@@ -82,3 +82,15 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_runs_run_date
 
 CREATE INDEX IF NOT EXISTS idx_pipeline_runs_status
     ON systematic_equity.pipeline_runs (status);
+
+CREATE TABLE IF NOT EXISTS systematic_equity.company_universe_overrides (
+    symbol VARCHAR(50) PRIMARY KEY,
+    action VARCHAR(20) NOT NULL
+        CHECK (action IN ('include', 'exclude')),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    reason TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_company_universe_overrides_action_active
+    ON systematic_equity.company_universe_overrides (action, is_active);

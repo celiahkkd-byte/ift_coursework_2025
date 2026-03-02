@@ -15,14 +15,12 @@ UNIVERSE_SELECT_SQL = {
     FROM systematic_equity.company_static
     {where_clause}
     ORDER BY symbol
-    {limit_clause}
     """,
     "equity_static": """
     SELECT DISTINCT symbol
     FROM systematic_equity.equity_static
     {where_clause}
     ORDER BY symbol
-    {limit_clause}
     """,
 }
 
@@ -72,6 +70,42 @@ def _dedupe_symbols(symbols: List[str]) -> List[str]:
     return out
 
 
+def _apply_universe_overrides(
+    base_symbols: List[str],
+    override_rows: List[tuple[str, str, bool]],
+) -> List[str]:
+    """Apply include/exclude overrides on top of base universe symbols."""
+    base_set = {str(s).strip().upper() for s in base_symbols if str(s).strip()}
+    final_set = set(base_set)
+
+    include_symbols: List[str] = []
+    for raw_symbol, raw_action, raw_is_active in override_rows:
+        symbol = str(raw_symbol or "").strip().upper()
+        if not symbol:
+            continue
+        action = str(raw_action or "").strip().lower()
+        is_active = bool(raw_is_active)
+
+        if action == "exclude":
+            if is_active:
+                final_set.discard(symbol)
+            continue
+        if action == "include":
+            if is_active:
+                final_set.add(symbol)
+                include_symbols.append(symbol)
+            continue
+
+    # Keep base order first, then additional include symbols in alpha order.
+    base_ordered = [s for s in base_symbols if str(s).strip().upper() in final_set]
+    included_only = sorted(
+        s for s in {str(x).strip().upper() for x in include_symbols} if s not in base_set
+    )
+    out = [str(s).strip().upper() for s in base_ordered]
+    out.extend(included_only)
+    return _dedupe_symbols(out)
+
+
 def get_company_universe(
     company_limit: Optional[int], country_allowlist: Optional[object] = None
 ) -> list[str]:
@@ -107,10 +141,6 @@ def get_company_universe(
         errors = []
         for table_name in ("company_static", "equity_static"):
             params = {}
-            limit_clause = ""
-            if limit is not None:
-                params["limit"] = limit
-                limit_clause = "LIMIT :limit"
             where_clause = ""
             if countries:
                 placeholders = []
@@ -120,14 +150,27 @@ def get_company_universe(
                     params[key] = country
                 where_clause = f"WHERE country IN ({', '.join(placeholders)})"
 
-            sql = text(
-                UNIVERSE_SELECT_SQL[table_name].format(
-                    where_clause=where_clause, limit_clause=limit_clause
-                )
-            )
+            sql = text(UNIVERSE_SELECT_SQL[table_name].format(where_clause=where_clause))
             try:
                 rows = conn.execute(sql, params).fetchall()
-                return _dedupe_symbols([str(r[0]) for r in rows])
+                base_symbols = _dedupe_symbols([str(r[0]).strip().upper() for r in rows])
+
+                try:
+                    override_rows = conn.execute(
+                        text(
+                            """
+                            SELECT symbol, action, is_active
+                            FROM systematic_equity.company_universe_overrides
+                            """
+                        )
+                    ).fetchall()
+                    merged = _apply_universe_overrides(base_symbols, list(override_rows))
+                except Exception:
+                    merged = base_symbols
+
+                if limit is not None:
+                    return merged[:limit]
+                return merged
             except Exception as exc:
                 errors.append(f"{table_name}: {exc}")
 

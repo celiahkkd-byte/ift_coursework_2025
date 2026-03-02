@@ -10,7 +10,5 @@ ALLOWED_SOURCES = {
     "yfinance",
     "extractor_b",
     "factor_transform",
-    "source_a",
-    "source_a_test",
-    "unknown",
+    "cache_replay",
 }

@@ -8,7 +8,7 @@ def test_quality_counts_missing_and_duplicates_by_db_unique_key():
             "observation_date": "2026-02-14",
             "factor_name": "pb_ratio",
             "factor_value": 1.0,
-            "source": "source_a",
+            "source": "alpha_vantage",
             "metric_frequency": "daily",
         },
         # Same (symbol, factor_name, observation_date) => duplicate in DB sense
@@ -37,7 +37,7 @@ def test_quality_flags_missing_required_and_invalid_frequency():
             "observation_date": "2026-02-14",
             "factor_name": "pb_ratio",
             "factor_value": 1.0,
-            "source": "source_a",
+            "source": "alpha_vantage",
             "metric_frequency": "daily",
         },
         {
@@ -45,7 +45,7 @@ def test_quality_flags_missing_required_and_invalid_frequency():
             "observation_date": "2026-02-14",
             "factor_name": "pb_ratio",
             "factor_value": 1.0,
-            "source": "source_a",
+            "source": "alpha_vantage",
             "metric_frequency": "hourly",  # invalid
         },
     ]

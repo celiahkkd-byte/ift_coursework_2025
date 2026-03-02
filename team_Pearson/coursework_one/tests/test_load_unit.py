@@ -106,7 +106,7 @@ def test_load_curated_executes_upsert(monkeypatch):
             "observation_date": "2026-02-14",
             "factor_name": "test_factor_load",
             "value": 1.0,
-            "source": "source_a",
+            "source": "alpha_vantage",
             "frequency": "daily",
         }
     ]
@@ -378,7 +378,7 @@ def test_load_curated_reports_idempotency_stats_on_repeat_runs(monkeypatch):
             "observation_date": "2026-02-14",
             "factor_name": "test_factor_load",
             "factor_value": 1.0,
-            "source": "source_a",
+            "source": "alpha_vantage",
             "metric_frequency": "daily",
             "source_report_date": "2026-02-14",
         }

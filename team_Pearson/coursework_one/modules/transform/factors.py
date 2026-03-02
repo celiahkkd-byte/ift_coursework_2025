@@ -92,6 +92,78 @@ FINANCIAL_ATOMIC_FACTORS = {
 }
 
 
+def _parse_iso_date(value: Any) -> Optional[date]:
+    raw = str(value or "").strip()[:10]
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _period_key(obs_date: date, output_frequency: str) -> tuple:
+    if output_frequency == "daily":
+        return (obs_date.year, obs_date.month, obs_date.day)
+    if output_frequency == "weekly":
+        iso = obs_date.isocalendar()
+        return (int(iso[0]), int(iso[1]))
+    if output_frequency == "monthly":
+        return (obs_date.year, obs_date.month)
+    if output_frequency == "quarterly":
+        quarter = (obs_date.month - 1) // 3 + 1
+        return (obs_date.year, quarter)
+    if output_frequency == "annual":
+        return (obs_date.year,)
+    raise ValueError(f"Unsupported output_frequency: {output_frequency}")
+
+
+def _sample_records_by_frequency(
+    records: List[Dict[str, Any]],
+    *,
+    output_frequency: str,
+) -> List[Dict[str, Any]]:
+    """Sample records by output frequency using latest observation per period."""
+    output_frequency = str(output_frequency).strip().lower()
+    if output_frequency == "daily":
+        return records
+
+    sampled: Dict[tuple, Dict[str, Any]] = {}
+    for rec in records:
+        symbol = str(rec.get("symbol") or "")
+        factor_name = str(rec.get("factor_name") or "")
+        obs_date = _parse_iso_date(rec.get("observation_date"))
+        if not symbol or not factor_name or obs_date is None:
+            continue
+
+        key = (symbol, factor_name, _period_key(obs_date, output_frequency))
+        existing = sampled.get(key)
+        if existing is None:
+            sampled[key] = rec
+            continue
+
+        curr_obs = _parse_iso_date(existing.get("observation_date"))
+        if curr_obs is None or obs_date > curr_obs:
+            sampled[key] = rec
+            continue
+        if obs_date == curr_obs:
+            # Tie-breaker: prefer newer source_report_date when available.
+            curr_srd = _parse_iso_date(existing.get("source_report_date"))
+            next_srd = _parse_iso_date(rec.get("source_report_date"))
+            if curr_srd is None or (next_srd is not None and next_srd > curr_srd):
+                sampled[key] = rec
+
+    out = list(sampled.values())
+    out.sort(
+        key=lambda r: (
+            str(r.get("symbol") or ""),
+            str(r.get("observation_date") or ""),
+            str(r.get("factor_name") or ""),
+        )
+    )
+    return out
+
+
 def _month_ends(start: date, end: date) -> List[date]:
     out: List[date] = []
     cur = date(start.year, start.month, 1)
@@ -105,29 +177,6 @@ def _month_ends(start: date, end: date) -> List[date]:
             out.append(month_end)
         cur = nxt
     return out
-
-
-def _quarter_ends(start: date, end: date) -> List[date]:
-    out: List[date] = []
-    for year in range(start.year, end.year + 1):
-        for month in (3, 6, 9, 12):
-            if month == 12:
-                q_end = date(year, 12, 31)
-            else:
-                q_end = date(year, month + 1, 1) - timedelta(days=1)
-            if start <= q_end <= end:
-                out.append(q_end)
-    return out
-
-
-def _latest_on_or_before(frame, cutoff: date, max_stale_days: Optional[int] = None):
-    subset = frame[frame["observation_date"] <= cutoff]
-    if subset.empty:
-        return None
-    row = subset.iloc[-1]
-    if max_stale_days is not None and (cutoff - row["observation_date"]).days > max_stale_days:
-        return None
-    return row
 
 
 def _latest_financial_with_staleness_logging(
@@ -490,22 +539,25 @@ def _compute_ebitda_margin(df, end_date: date, start_date: date) -> List[Dict[st
     revenue["revenue"] = pd.to_numeric(revenue["revenue"], errors="coerce")
 
     records: List[Dict[str, Any]] = []
-    for symbol in sorted(ebitda["symbol"].dropna().unique()):
+    symbols = set(ebitda["symbol"].dropna().unique())
+    symbols.update(revenue["symbol"].dropna().unique())
+    for symbol in sorted(symbols):
         es = ebitda[ebitda["symbol"] == symbol].sort_values("observation_date")
         rs = revenue[revenue["symbol"] == symbol].sort_values("observation_date")
         if es.empty or rs.empty:
             continue
-        for q_end in _quarter_ends(start_date, end_date):
+        for obs_ts in pd.date_range(start=start_date, end=end_date, freq="D"):
+            obs_date = obs_ts.date()
             e_row = _latest_financial_with_staleness_logging(
                 es,
-                cutoff=q_end,
+                cutoff=obs_date,
                 factor="ebitda_margin",
                 symbol=symbol,
                 metric="enterprise_ebitda",
             )
             r_row = _latest_financial_with_staleness_logging(
                 rs,
-                cutoff=q_end,
+                cutoff=obs_date,
                 factor="ebitda_margin",
                 symbol=symbol,
                 metric="enterprise_revenue",
@@ -519,11 +571,11 @@ def _compute_ebitda_margin(df, end_date: date, start_date: date) -> List[Dict[st
             records.append(
                 {
                     "symbol": symbol,
-                    "observation_date": q_end.isoformat(),
+                    "observation_date": obs_date.isoformat(),
                     "factor_name": "ebitda_margin",
                     "factor_value": float(ebitda_v / rev_v),
                     "source": "factor_transform",
-                    "metric_frequency": "quarterly",
+                    "metric_frequency": "daily",
                     "source_report_date": max(
                         e_row["observation_date"], r_row["observation_date"]
                     ).isoformat(),
@@ -702,6 +754,7 @@ def compute_final_factor_records(
     atomic_records: Iterable[Dict[str, Any]],
     run_date: str,
     backfill_years: int,
+    output_frequency: str = "daily",
 ) -> List[Dict[str, Any]]:
     """Compute final factors from atomic records."""
     import pandas as pd
@@ -737,7 +790,7 @@ def compute_final_factor_records(
     out.extend(_compute_ebitda_margin(df, end_date, start_date))
     out.extend(_compute_sentiment_30d_avg(df, end_date, start_date))
     _flush_quality_event_summary()
-    return out
+    return _sample_records_by_frequency(out, output_frequency=output_frequency)
 
 
 def _load_atomic_records_from_postgres(
@@ -879,6 +932,7 @@ def build_and_load_final_factors(
     run_date: str,
     backfill_years: int,
     *,
+    output_frequency: str = "daily",
     symbols: Optional[List[str]] = None,
     dry_run: bool = False,
 ) -> int:
@@ -890,6 +944,7 @@ def build_and_load_final_factors(
         atomic_records=atomic_records,
         run_date=run_date,
         backfill_years=backfill_years,
+        output_frequency=output_frequency,
     )
     if not final_records:
         return 0

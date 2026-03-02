@@ -29,14 +29,14 @@ def test_normalize_prefers_explicit_factor_value():
             "factor_name": "debt_to_equity",
             "factor_value": 3.0,
             "value": 99.0,
-            "source": "source_a",
+            "source": "alpha_vantage",
             "metric_frequency": "DAILY",
         }
     ]
     out = normalize_records(raw)
     assert out[0]["observation_date"] == "2026-02-14"
     assert out[0]["factor_value"] == 3.0
-    assert out[0]["source"] == "source_a"
+    assert out[0]["source"] == "alpha_vantage"
     assert out[0]["metric_frequency"] == "daily"
 
 

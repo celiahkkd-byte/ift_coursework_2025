@@ -122,6 +122,14 @@ def test_universe_country_allowlist_passes_filter_params(monkeypatch):
             return False
 
         def execute(self, sql, params=None):
+            sql_str = str(sql)
+            if "company_universe_overrides" in sql_str:
+
+                class _R2:
+                    def fetchall(self_non):
+                        return []
+
+                return _R2()
             captured["params"] = params
 
             class _R:
@@ -154,6 +162,14 @@ def test_universe_country_allowlist_string_is_split_and_normalized(monkeypatch):
             return False
 
         def execute(self, sql, params=None):
+            sql_str = str(sql)
+            if "company_universe_overrides" in sql_str:
+
+                class _R2:
+                    def fetchall(self_non):
+                        return []
+
+                return _R2()
             captured["params"] = params
 
             class _R:
@@ -177,3 +193,79 @@ def test_universe_country_allowlist_string_is_split_and_normalized(monkeypatch):
 def test_universe_country_allowlist_invalid_type_raises():
     with pytest.raises(ValueError, match="Expected list or comma-separated string"):
         universe.get_company_universe(5, country_allowlist=123)  # type: ignore[arg-type]
+
+
+def test_universe_overrides_exclude_existing_and_include_new_symbol(monkeypatch):
+    monkeypatch.delenv("CW1_TEST_MODE", raising=False)
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params=None):
+            sql_str = str(sql)
+
+            class _R:
+                def __init__(self, rows):
+                    self._rows = rows
+
+                def fetchall(self_non):
+                    return self_non._rows
+
+            if "company_universe_overrides" in sql_str:
+                return _R(
+                    [
+                        ("AAPL", "exclude", True),
+                        ("NVDA", "include", True),
+                    ]
+                )
+            return _R([("AAPL",), ("MSFT",)])
+
+    class _Engine2:
+        def connect(self):
+            return _Conn()
+
+    monkeypatch.setattr(universe, "get_db_engine", lambda: _Engine2())
+    out = universe.get_company_universe(None)
+    assert out == ["MSFT", "NVDA"]
+
+
+def test_universe_overrides_inactive_rows_do_not_apply(monkeypatch):
+    monkeypatch.delenv("CW1_TEST_MODE", raising=False)
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params=None):
+            sql_str = str(sql)
+
+            class _R:
+                def __init__(self, rows):
+                    self._rows = rows
+
+                def fetchall(self_non):
+                    return self_non._rows
+
+            if "company_universe_overrides" in sql_str:
+                return _R(
+                    [
+                        ("AAPL", "exclude", False),
+                        ("NVDA", "include", False),
+                    ]
+                )
+            return _R([("AAPL",), ("MSFT",)])
+
+    class _Engine2:
+        def connect(self):
+            return _Conn()
+
+    monkeypatch.setattr(universe, "get_db_engine", lambda: _Engine2())
+    out = universe.get_company_universe(None)
+    assert out == ["AAPL", "MSFT"]

@@ -27,7 +27,7 @@ def test_extract_source_a_test_mode(monkeypatch):
         frequency="daily",
     )
     assert len(out) == 2
-    assert all(r["source"] == "source_a_test" for r in out)
+    assert all(r["source"] == "alpha_vantage" for r in out)
 
 
 def test_extract_total_debt_found():
@@ -98,6 +98,80 @@ def test_extract_fundamentals_unified_order_av_then_yf_fallback(monkeypatch):
     assert out["enterprise_revenue"] == 900.0
 
 
+def test_extract_fundamentals_uses_income_statement_for_quarterly_enterprise_metrics(monkeypatch):
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "k")
+
+    monkeypatch.setattr(
+        source_a,
+        "_download_overview_alpha_vantage",
+        lambda symbol, api_key: {
+            "TotalDebt": "100",
+            "BookValue": "10",
+            "SharesOutstanding": "5",
+            "EBITDA": "200",
+            "RevenueTTM": "500",
+            "LatestQuarter": "2025-12-31",
+            "Currency": "USD",
+        },
+    )
+    monkeypatch.setattr(
+        source_a,
+        "_download_balance_sheet_alpha_vantage",
+        lambda symbol, api_key: {
+            "quarterlyReports": [
+                {
+                    "fiscalDateEnding": "2025-12-31",
+                    "totalDebt": "120",
+                    "totalShareholderEquity": "300",
+                    "commonStockSharesOutstanding": "10",
+                },
+                {
+                    "fiscalDateEnding": "2025-09-30",
+                    "totalDebt": "110",
+                    "totalShareholderEquity": "280",
+                    "commonStockSharesOutstanding": "10",
+                },
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        source_a,
+        "_download_income_statement_alpha_vantage",
+        lambda symbol, api_key: {
+            "quarterlyReports": [
+                {
+                    "fiscalDateEnding": "2025-12-31",
+                    "ebitda": "210",
+                    "totalRevenue": "520",
+                },
+                {
+                    "fiscalDateEnding": "2025-09-30",
+                    "ebitda": "190",
+                    "totalRevenue": "480",
+                },
+            ]
+        },
+    )
+
+    class _Ticker:
+        def __init__(self):
+            self.quarterly_balance_sheet = pd.DataFrame()
+            self.info = {}
+
+    out = source_a._extract_fundamentals(
+        symbol="SYM1",
+        ticker=_Ticker(),
+        config={},
+        run_date="2026-02-14",
+        backfill_years=1,
+    )
+    qf = out["quarterly_fundamentals"]
+    assert len(qf) == 2
+    latest = [r for r in qf if r["report_date"] == "2025-12-31"][0]
+    assert latest["enterprise_ebitda"] == 210.0
+    assert latest["enterprise_revenue"] == 520.0
+
+
 def test_build_records_from_history_shape():
     idx = pd.to_datetime(["2026-02-13", "2026-02-14"])
     history = pd.DataFrame(
@@ -149,6 +223,48 @@ def test_build_fundamental_records_shape():
     } == names
     assert all(r["source_report_date"] is None for r in out)
     assert all(r["observation_date"] is None for r in out)
+
+
+def test_build_fundamental_records_expands_quarters_within_backfill_window():
+    out = source_a._build_fundamental_records(
+        symbol="AAPL",
+        run_date="2026-02-14",
+        frequency="daily",
+        source_label="alpha_vantage",
+        backfill_years=1,
+        fundamentals={
+            "quarterly_fundamentals": [
+                {
+                    "report_date": "2024-09-30",
+                    "total_debt": 1.0,
+                    "total_shareholder_equity": 2.0,
+                },
+                {
+                    "report_date": "2025-03-31",
+                    "total_debt": 3.0,
+                    "total_shareholder_equity": 4.0,
+                },
+                {
+                    "report_date": "2025-06-30",
+                    "total_debt": 5.0,
+                    "total_shareholder_equity": 6.0,
+                },
+                {
+                    "report_date": "2025-09-30",
+                    "total_debt": 7.0,
+                    "total_shareholder_equity": 8.0,
+                },
+                {
+                    "report_date": "2025-12-31",
+                    "total_debt": 9.0,
+                    "total_shareholder_equity": 10.0,
+                },
+            ]
+        },
+    )
+    report_dates = sorted({r["report_date"] for r in out if r["report_date"] is not None})
+    assert report_dates == ["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"]
+    assert len(out) == 24  # 4 quarters * 6 financial metrics
 
 
 def test_extract_source_a_handles_symbol_failure(monkeypatch):
